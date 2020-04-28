@@ -50,7 +50,8 @@ def parse_args():
 		help="Tool for merging overlapping paired-end reads")
 
 	# Assembly
-	parser.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler"])
+	parser.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler"],
+		help="Assembler: unicycler (default, better quality, may use only long reads,) or spades (faster, may use mate-pair reads).")
 	parser.add_argument("--no-correct", action="store_true", help="Disable read correction")
 
 	# Spades options
@@ -58,9 +59,8 @@ def parse_args():
 
 	# Unicycler options
 	parser.add_argument("--unicycler-mode", default="normal", choices=['conservative', 'normal', 'bold'],
-		help="")
+		help="Mode of unicycler assembler: conservative, normal (default) or bold.")
 	parser.add_argument("--linear-seqs", default=0, help="Expected number of linear sequences")
-	
 
 	# Annotation
 	parser.add_argument("-g", "--genome", help="Genome assembly when starting from annotation.")
@@ -69,11 +69,11 @@ def parse_args():
 	parser.add_argument("--locus-tag-inc", default=10, type=int, help="Locus tag increment, default = 10")
 	parser.add_argument("--center-name", help="Genome center name.")
 	parser.add_argument("--minimum-length", help="Minimum sequence length in genome assembly.")
-	
+
 	# phiX
 	parser.add_argument("--check-phix", action="store_true",
 		help="Check genome for presence of PhiX control sequence.")
-	
+
 	# CheckM
 	parser.add_argument("--checkm-mode", default="taxonomy_wf", choices=['taxonomy_wf', 'lineage_wf'],
 		help="Select CheckM working mode. Default is checking for domain-specific marker-set.")
@@ -145,6 +145,7 @@ def read_QC(args, reads):
 
 	return rc
 
+
 def merge_seqprep(args, reads, readdir):
 	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
 	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
@@ -171,7 +172,7 @@ def merge_seqprep(args, reads, readdir):
 def merge_bb(args, reads, readdir):
 	# Worth to be args?
 	bb_trim = True
-	bb_trimq = "10" # should be str
+	bb_trimq = "10"  # should be str
 
 	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
 	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
@@ -201,7 +202,7 @@ def pe_read_processing(args, reads):
 	logger.info("Read processing started")
 	readdir = create_subdir(args.output_dir, "reads")
 	truseq_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "util/TruSeq.adapters.fna")
-	
+
 	# Trimming and filtering constants
 	MINLEN = 55
 	WINDOW = 3
@@ -264,7 +265,7 @@ def pe_read_processing(args, reads):
 		else:
 			reads['merged'] = out
 
-	#Merging overlapping paired-end reads
+	# Merging overlapping paired-end reads
 	if "merged" not in reads.keys() and "pe_1" in reads.keys() and "pe_2" in reads.keys():
 		if args.merge_with == "bbmerge":
 			reads = merge_bb(args, reads, readdir)
@@ -289,16 +290,17 @@ def assemble(args, reads):
 		# as "--merged", "--isolate" etc.
 		try:
 			spades_help = str(subprocess.run(["spades.py"], stdout=subprocess.PIPE,
-				stderr=subprocess.PIPE,	universal_newlines=True).stdout)
+				stderr=subprocess.PIPE, universal_newlines=True).stdout)
 		except Exception as e:
 			logger.error("Failed to run \"spades\"")
 			raise e
 		version = re.search(r'(?<=v)\d\S+', spades_help).group(0)
 		logger.debug("Spades version %s detected" % version)
+
+		'''
 		v_major = int(version.split(".")[0])
 		v_minor = int(version.split(".")[1])
 
-		'''
 		I'm not sure is it worth to use this mode...
 		if v_major > 3 or (v_major >= 3 and v_minor >= 14):
 			cmd += ['--isolate']
@@ -320,7 +322,7 @@ def assemble(args, reads):
 			cmd += ["--nanopore", reads['nanopore']]
 		if 'pacbio' in reads.keys():
 			cmd += ["--pacbio", reads['pacbio']]
-		if args.no_correct == True:
+		if args.no_correct:
 			cmd += ["--only-assembler"]
 
 		logger.debug("Running: " + " ".join(cmd))
@@ -348,7 +350,7 @@ def assemble(args, reads):
 			stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
 		except Exception as e:
 			logger.critical("Failed to run \'Unicycler\'.")
-			raise e			
+			raise e
 
 		cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads)]
 		if 'pe_1' in reads.keys() and 'pe_2' in reads.keys():
@@ -376,7 +378,7 @@ def assemble(args, reads):
 		else:
 			logger.debug("Assembling finished")
 			return os.path.join(aslydir, "assembly.fasta")
-	
+
 	else:
 		logger.critical("Not yet implemented")
 
@@ -384,7 +386,7 @@ def assemble(args, reads):
 def locus_tag_gen(genome):
 	logger.info("No locus tag provided. Generating it as MD5 hash of genome")
 	with open(genome, 'rb') as genomefile:
-		locus_tag = "".join([ chr(ord(x) + 17).upper() for x in hashlib.md5(genomefile.read()).hexdigest()[0:6]])
+		locus_tag = "".join([chr(ord(x) + 17).upper() for x in hashlib.md5(genomefile.read()).hexdigest()[0:6]])
 		logger.info("Locus tag generated: %s" % locus_tag)
 		return locus_tag
 
@@ -416,7 +418,7 @@ def annotate(args):
 		cmd += ["--minimum_length", args.minimum_length]
 
 	logger.debug("Running: " + " ".join(cmd))
-	
+
 	if args.transparent:
 		try:
 			rc = subprocess.run(cmd).returncode
@@ -429,27 +431,27 @@ def annotate(args):
 			raise e
 
 	return os.path.join(annodir, "genome.fna")
-	# return annodir
 
 
 def check_phix(args):
+	logger.info("Checking assembly for presence of Illumina phiX control")
 	phix_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"util/phiX174.fasta")
 	blast_format = "6 sseqid pident slen length"
 	cmd = ["blastn", "-query", phix_path, "-subject", args.genome, "-outfmt", blast_format, "-evalue", "1e-6"]
 	logger.debug("Running: " + " ".join(cmd))
-	
+
 	try:
 		blast_out = str(subprocess.run(cmd, universal_newlines=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout).rstrip().split('\n')
 	except Exception as e:
 		raise e
-	
+
 	phix_contigs = []
 	for l in blast_out:
 		i, p, s, l = l.split("\t")
 		if float(p) > 95.0 and int(s)/int(l) > 0.5:
 			phix_contigs.append(i)
 	phix_contigs = list(set(phix_contigs))
-	
+
 	if len(phix_contigs) > 0:
 		logger.info(f"PhiX was found in: {', '.join(phix_contigs)}")
 		newgenome = os.path.join(args.output_dir, "assembly.nophix.fasta")
@@ -461,7 +463,7 @@ def check_phix(args):
 
 
 def run_checkm(args):
-	
+
 	checkm_indir = create_subdir(args.output_dir, "checkm_tmp_in")
 	try:
 		shutil.copy(args.genome, checkm_indir)
@@ -470,7 +472,7 @@ def run_checkm(args):
 
 	checkm_outdir = os.path.join(args.output_dir, "checkm")
 	checkm_outfile = os.path.join(args.output_dir, "CheckM.txt")
-	
+
 	checkm_ext = os.path.splitext(args.genome)[1]
 
 	if args.checkm_mode == "taxonomy_wf":
@@ -478,7 +480,7 @@ def run_checkm(args):
 		cmd = ["checkm", "taxonomy_wf", "-f", checkm_outfile, "-x", checkm_ext, "-t", str(args.threads)]
 
 		try:
-			checkm_taxon_list = str(subprocess.run(["checkm", "taxon_list"], 
+			checkm_taxon_list = str(subprocess.run(["checkm", "taxon_list"],
 				universal_newlines=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout)
 		except Exception as e:
 			raise e
@@ -489,7 +491,7 @@ def run_checkm(args):
 			logger.error("Wrong taxon rank for CheckM. Reset to domain.")
 			args.checkm_rank = None
 		'''
-		
+
 		if args.checkm_taxon and args.checkm_rank:
 			found = False
 			for l in checkm_taxon_list:
@@ -532,6 +534,7 @@ def run_checkm(args):
 	shutil.rmtree(checkm_indir)
 
 	return not bool(rc)
+
 
 def main():
 	args = parse_args()
@@ -576,7 +579,6 @@ def main():
 	# QC
 	if start_step_int == 1:
 		status = read_QC(args, reads)
-		# logger.debug("fastqc exit status: " + str(status))
 
 	# Processing
 	if start_step_int <= 2:
@@ -589,7 +591,6 @@ def main():
 
 	# Assembly QC
 	if start_step_int <= 4:
-		# check for PHIX ! - blastn against phix.fna
 		logger.info("Checking genome quality")
 		if args.check_phix:
 			args.genome = check_phix(args)
