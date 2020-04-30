@@ -56,6 +56,8 @@ def parse_args():
 
 	# Spades options
 	parser.add_argument("--use-scaffolds", action="store_true", help="SPAdes: Use assembled scaffolds.")
+	parser.add_argument("--spades-k-list",
+		help="List of kmers for Spades, even comma-separated numbers e.g. '21,33,55,77'")
 
 	# Unicycler options
 	parser.add_argument("--unicycler-mode", default="normal", choices=['conservative', 'normal', 'bold'],
@@ -324,6 +326,8 @@ def assemble(args, reads):
 			cmd += ["--pacbio", reads['pacbio']]
 		if args.no_correct:
 			cmd += ["--only-assembler"]
+		if args.spades_k_list:
+			cmd += ["-k", args.spades_k_list]
 
 		logger.debug("Running: " + " ".join(cmd))
 
@@ -494,14 +498,14 @@ def run_checkm(args):
 
 		if args.checkm_taxon and args.checkm_rank:
 			found = False
-			for l in checkm_taxon_list:
+			for l in checkm_taxon_list.split("\n"):
 				if args.checkm_taxon in l and args.checkm_rank in l:
 					found = True
 					break
 			if not found:
+				logger.error(f'Taxon {args.checkm_taxon} of rank {args.checkm_rank} not available for CheckM')
 				args.checkm_taxon = None
 				args.checkm_rank = None
-				logger.error(f'Taxon {args.checkm_taxon} of rank {args.checkm_rank} not available for CheckM')
 
 		if not args.checkm_taxon or not args.checkm_rank:
 			args.checkm_taxon = "Archaea" if args.domain == "archaea" else "Bacteria"
