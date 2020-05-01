@@ -1,27 +1,23 @@
-# ZGA genome annotator
+# ZGA - prokaryotic genome assembly and annotation pipeline
 
 
 ## Installation
 
-### From Github
 
-Now you can get ZGA by cloning from the repository with `git clone` or by downloading an archive.
+### Installing dependencies
 
-### Dependencies
-
-ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses several software and libs:
+ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses several software and libs including:
 
 * fastqc
 * ea-utils
-* bbmap or seqprep
+* bbmap (or seqprep)
 * spades
-* unicycler (optional)
+* unicycler
 * CheckM
 * DFast
 * BioPython
 
-
-#### Conda
+All of them may be installed using **conda**:
 
 It's highly recommended to create a new conda environment:
 
@@ -33,19 +29,33 @@ and activate it
 
 
 Otherwise you may install dependencies to existing conda environment:
+
 `conda install python>=3.6 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython`
 
 
-#### Other ways
+Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
-Of course, it's possible to use another ways even compile all tools from source code. In this case you should check if binaries are in your 'PATH' variable.
 
-### Operating systems
+### Get source from Github
 
-ZGA was tested on Ubuntu 18.04. Your feedback is welcome!
+You can get ZGA by cloning from the repository with `git clone https://github.com/laxeye/zga.git` or by downloading an archive.
+
+
+### Install from PyPi
+
+Run `pip install zga` it will check if You have Biopython and istall it if not. But all other dependencies You should install manually or using **conda**. CheckM is available on **PyPi**, but it's easier to install it using **conda**.
+
+
+### Operating systems requirements
+
+ZGA was tested on Ubuntu 18.04. Most probably any modern 64-bit Linux distribuition is enough.
+
+Your feedback on other OS is welcome!
 
 
 ## Usage
+
+You should run `zga.py` if You cloned the source code or `zga` otherwise.
 
 Run 'zga.py -h' to get a help message.
 
@@ -65,22 +75,24 @@ or from Nanopore reads only using unicycler
 
 Perform genome assesment and annotation:
 
-With 'Pectobacterium' CheckM marker set: `zga.py --step check -g pectobacterium_sp.fasta --checkm_rank genus --checkm_taxon Pectobacterium -o my_output_dir`
+With 'Pectobacterium' CheckM marker set: 
 
-Let CheckM to infer the right marker set: `zga.py --step check -g my_genome.fa --checkm_mode lineage -o my_output_dir`
+`zga.py --step check -g pectobacterium_sp.fasta --checkm_rank genus --checkm_taxon Pectobacterium -o my_output_dir`
 
-You may just annotate the genome with DFAST: `zga.py --step annotate -g my_perfect_genome.fasta -o my_output_dir`
+Let CheckM to infer the right marker set: 
+
+`zga.py --step check -g my_genome.fa --checkm_mode lineage -o my_output_dir`
 
 
 ## Know issues and limitations
 
 Don't forget: ZGA is in the early testing...
 
-I hope to fix next issues ASAP:
+I hope to fix next issues **ASAP**:
 
 * It's not posible to provide multiple read libraries i.e. tow sets of PE reads or two nanopore runs. 
 * It's not possible to install all dependencies with Python 3.8 via conda, please use 3.7 or 3.6.
-* There is no conda or pip package
+* There is no conda package
 
 Don't hesitate to report bug or feature!
 

@@ -10,7 +10,7 @@ import hashlib
 
 
 def parse_args():
-	parser = argparse.ArgumentParser(description="ZGA genome annotator")
+	parser = argparse.ArgumentParser(description="ZGA genome assembly and annotation pipeline")
 
 	# General options
 	parser.add_argument("-s", "--step", help="Starting step of the pipeline", default="qc",
@@ -52,7 +52,7 @@ def parse_args():
 	# Assembly
 	parser.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler"],
 		help="Assembler: unicycler (default, better quality, may use only long reads,) or spades (faster, may use mate-pair reads).")
-	parser.add_argument("--no-correct", action="store_true", help="Disable read correction")
+	parser.add_argument("--no-correction", action="store_true", help="Disable read correction")
 
 	# Spades options
 	parser.add_argument("--use-scaffolds", action="store_true", help="SPAdes: Use assembled scaffolds.")
@@ -203,7 +203,7 @@ def merge_bb(args, reads, readdir):
 def pe_read_processing(args, reads):
 	logger.info("Read processing started")
 	readdir = create_subdir(args.output_dir, "reads")
-	truseq_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "util/TruSeq.adapters.fna")
+	truseq_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/TruSeq.adapters.fasta")
 
 	# Trimming and filtering constants
 	MINLEN = 55
@@ -324,7 +324,7 @@ def assemble(args, reads):
 			cmd += ["--nanopore", reads['nanopore']]
 		if 'pacbio' in reads.keys():
 			cmd += ["--pacbio", reads['pacbio']]
-		if args.no_correct:
+		if args.no_correction:
 			cmd += ["--only-assembler"]
 		if args.spades_k_list:
 			cmd += ["-k", args.spades_k_list]
@@ -359,7 +359,7 @@ def assemble(args, reads):
 		cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads)]
 		if 'pe_1' in reads.keys() and 'pe_2' in reads.keys():
 			cmd += ["-1", reads['pe_1'], "-2", reads['pe_2']]
-		if args.no_correct:
+		if args.no_correction:
 			cmd += ["--no_correct"]
 		if 'merged' in reads.keys():
 			cmd += ["-s", reads['merged']]
@@ -439,7 +439,7 @@ def annotate(args):
 
 def check_phix(args):
 	logger.info("Checking assembly for presence of Illumina phiX control")
-	phix_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"util/phiX174.fasta")
+	phix_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"data/phiX174.fasta")
 	blast_format = "6 sseqid pident slen length"
 	cmd = ["blastn", "-query", phix_path, "-subject", args.genome, "-outfmt", blast_format, "-evalue", "1e-6"]
 	logger.debug("Running: " + " ".join(cmd))
@@ -537,7 +537,7 @@ def run_checkm(args):
 
 	shutil.rmtree(checkm_indir)
 
-	return not bool(rc)
+	return rc
 
 
 def main():
@@ -582,7 +582,7 @@ def main():
 
 	# QC
 	if start_step_int == 1:
-		status = read_QC(args, reads)
+		return_code = read_QC(args, reads)
 
 	# Processing
 	if start_step_int <= 2:
@@ -598,7 +598,7 @@ def main():
 		logger.info("Checking genome quality")
 		if args.check_phix:
 			args.genome = check_phix(args)
-		run_checkm(args)
+		return_code = run_checkm(args)
 
 	# Annotation
 	if start_step_int <= 5:
