@@ -1,5 +1,6 @@
 # ZGA - prokaryotic genome assembly and annotation pipeline
 
+[![version status](https://img.shields.io/pypi/v/zga.svg)](https://pypi.python.org/pypi/zga)
 
 ## Installation
 
