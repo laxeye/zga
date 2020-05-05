@@ -203,7 +203,7 @@ def merge_bb(args, reads, readdir):
 def pe_read_processing(args, reads):
 	logger.info("Read processing started")
 	readdir = create_subdir(args.output_dir, "reads")
-	truseq_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/TruSeq.adapters.fasta")
+	illumina_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/illumina.adapters.fasta")
 
 	# Trimming and filtering constants
 	MINLEN = 55
@@ -212,7 +212,7 @@ def pe_read_processing(args, reads):
 	if args.adapters and os.path.isfile(args.adapters):
 		args.adapters = os.path.abspath(args.adapters)
 	else:
-		args.adapters = truseq_adapters
+		args.adapters = illumina_adapters
 
 	if "pe_1" in reads.keys() and "pe_2" in reads.keys():
 		logger.info("Trimming and filtering paired end reads")

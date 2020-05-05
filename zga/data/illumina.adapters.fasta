@@ -1,0 +1,19 @@
+>Truseq read1 trimming sequence
+GATCGGAAGAGCACACG
+>Truseq read2 trimming sequence
+AGATCGGAAGAGCGTCGT
+>Illumina TruSeq UD/CD R1
+AGATCGGAAGAGCACACGTCTGAACTCCAGTCA
+>Illumina TruSeq UD/CD R2
+AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT
+
+>Nextera read1 trimming sequence
+GTGTATAAGAGACAG
+>Nextera read2 trimming sequence
+CTGTCTCTTATACAC
+>Nextera adapter trimming sequence
+CTGTCTCTTATACACATCT
+>Nextera Transposase Adapters Read1
+TCGTCGGCAGCGTCAGATGTGTATAAGAGACAG
+>Nextera Transposase Adapters Read2
+GTCTCGTGGGCTCGGAGATGTGTATAAGAGACAG
