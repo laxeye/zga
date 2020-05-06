@@ -17,6 +17,7 @@ ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses sev
 * CheckM
 * DFast
 * BioPython
+* blastn
 
 All of them may be installed using **conda**:
 
@@ -62,15 +63,15 @@ Run 'zga.py -h' to get a help message.
 
 Examples:
 
-Perform all steps (read qc, read trimming and merging, assembly, CheckM assesment with default (bacterial) marker set, DFAST annotation) and use 4 threads, where possible:
+Perform all steps: read qc, read trimming and merging, assembly, CheckM assesment with default (bacterial) marker set, DFAST annotation and use 4 CPU threads where possible:
 
 `zga.py -1 R1.fastq.gz -2 R2.fastq.gz --threads 4 -o my_assembly`
 
-or use SPAdes and provide it with paired-end and nanopore reads of archaeal genome (Checfkm will use archaeal markers)
+or use SPAdes and provide it with paired-end and nanopore reads of archaeal genome (CheckM will use archaeal markers)
 
 `zga.py -1 R1.fastq.gz -2 R2.fastq.gz --nanopore MiniION.fastq.gz -a spades --threads 4 --domain archaea -o my_assembly`
 
-or from Nanopore reads only using unicycler
+or from Nanopore reads using only unicycler
 
 `zga.py --nanopore MiniION.fastq.gz -o nanopore_assembly`
 
@@ -82,7 +83,7 @@ With 'Pectobacterium' CheckM marker set:
 
 Let CheckM to infer the right marker set: 
 
-`zga.py --step check -g my_genome.fa --checkm_mode lineage -o my_output_dir`
+`zga.py --first-step check -g my_genome.fa --checkm_mode lineage -o my_output_dir`
 
 
 ## Know issues and limitations
@@ -94,6 +95,10 @@ I hope to fix next issues **ASAP**:
 * It's not posible to provide multiple read libraries i.e. tow sets of PE reads or two nanopore runs. 
 * It's not possible to install all dependencies with Python 3.8 via conda, please use 3.7 or 3.6.
 * There is no conda package
+
+Limitations of unicycler:
+
+* Unicycler doesn't use mate-pair reads.
 
 Don't hesitate to report bug or feature!
 
