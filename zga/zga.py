@@ -13,7 +13,9 @@ def parse_args():
 	parser = argparse.ArgumentParser(description="ZGA genome assembly and annotation pipeline")
 
 	# General options
-	parser.add_argument("-s", "--step", help="Starting step of the pipeline", default="qc",
+	parser.add_argument("-s", "--first-step", help="First step of the pipeline", default="qc",
+		choices=["qc", "processing", "assembling", "check_genome", "annotation"])
+	parser.add_argument("-l", "--last-step", help="Last step of the pipeline", default="annotation",
 		choices=["qc", "processing", "assembling", "check_genome", "annotation"])
 	parser.add_argument("-o", "--output-dir", required=True, help="Output directory")
 	parser.add_argument("--force", action="store_true", help="Overwrite output directory if exists")
@@ -47,7 +49,9 @@ def parse_args():
 		help="Base quality cutoff for short reads")
 	parser.add_argument("--adapters", help="Adapter sequences for trimming from short reads")
 	parser.add_argument("--merge-with", default="bbmerge", choices=["bbmerge", "seqprep"],
-		help="Tool for merging overlapping paired-end reads")
+		help="Tool for merging overlapping paired-end reads: bbmerge (default) or seqprep")
+	parser.add_argument("--filter-by-tile", action="store_true",
+		help="Filter reads based on positional quality over a flowcell.")
 
 	# Assembly
 	parser.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler"],
@@ -55,7 +59,8 @@ def parse_args():
 	parser.add_argument("--no-correction", action="store_true", help="Disable read correction")
 
 	# Spades options
-	parser.add_argument("--use-scaffolds", action="store_true", help="SPAdes: Use assembled scaffolds.")
+	parser.add_argument("--use-scaffolds", action="store_true",
+		help="SPAdes: Use assembled scaffolds.")
 	parser.add_argument("--spades-k-list",
 		help="List of kmers for Spades, even comma-separated numbers e.g. '21,33,55,77'")
 
@@ -63,12 +68,16 @@ def parse_args():
 	parser.add_argument("--unicycler-mode", default="normal", choices=['conservative', 'normal', 'bold'],
 		help="Mode of unicycler assembler: conservative, normal (default) or bold.")
 	parser.add_argument("--linear-seqs", default=0, help="Expected number of linear sequences")
+	parser.add_argument("--extract-replicons", action="store_true",
+		help="Extract replicons (e.g. plasmids) from Unicycler assembly to separate files")
 
 	# Annotation
 	parser.add_argument("-g", "--genome", help="Genome assembly when starting from annotation.")
 	parser.add_argument("--gcode", default=11, type=int, help="Genetic code.")
-	parser.add_argument("--locus-tag", help="Locus tag prefix. If not provided prefix will be generated from MD5 checksum.")
-	parser.add_argument("--locus-tag-inc", default=10, type=int, help="Locus tag increment, default = 10")
+	parser.add_argument("--locus-tag",
+		help="Locus tag prefix. If not provided prefix will be generated from MD5 checksum.")
+	parser.add_argument("--locus-tag-inc", default=10, type=int,
+		help="Locus tag increment, default = 10")
 	parser.add_argument("--center-name", help="Genome center name.")
 	parser.add_argument("--minimum-length", help="Minimum sequence length in genome assembly.")
 
@@ -130,22 +139,44 @@ def create_subdir(parent, child):
 	try:
 		os.mkdir(path)
 	except Exception as e:
-		raise e("Impossible to create directory \"%s\"" % path)
+		raise e(f"Impossible to create directory: {path}")
 	return path
+
+
+def run_external(args, cmd):
+	logger.debug("Running: " + " ".join(cmd))
+	if args.transparent:
+		rc = subprocess.run(cmd).returncode
+	else:
+		rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
+	if rc != 0:
+		logger.error(f'Non-zero return code of "{" ".join(cmd)}"')
+
+	return rc
 
 
 def read_QC(args, reads):
 	logger.info("Read quality control started")
 	qcoutdir = create_subdir(args.output_dir, "QC")
 	cmd = ["fastqc", "-q", "-t", str(args.threads), "-o", qcoutdir] + list(reads.values())
-	logger.debug("Running: " + " ".join(cmd))
 
-	if args.transparent:
-		rc = subprocess.run(cmd).returncode
-	else:
-		rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
+	return run_external(args, cmd)
 
-	return rc
+
+def filter_by_tile(args, reads, readdir):
+	filtered_pe_r1 = os.path.join(readdir, "filtered_pe_r1.fq.gz")
+	filtered_pe_r2 = os.path.join(readdir, "filtered_pe_r2.fq.gz")
+
+	cmd = ["filterbytile.sh", f"in={reads[pe_1]}", f"in2={reads[pe_2]}",
+	f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}"]
+
+	rc = run_external(args, cmd)
+
+	if rc == 0:
+		reads['pe_1'] = filtered_pe_r1
+		reads['pe_2'] = filtered_pe_r2
+
+	return reads
 
 
 def merge_seqprep(args, reads, readdir):
@@ -155,15 +186,10 @@ def merge_seqprep(args, reads, readdir):
 	cmd = ["seqprep", "-f", reads['pe_1'], "-r", reads['pe_2'], "-1", notmerged_r1,
 		"-2", notmerged_r2, "-s", merged]
 	logger.info("Merging paired-end reads.")
-	logger.debug("Running: " + " ".join(cmd))
 
-	if args.transparent:
-		rc = subprocess.run(cmd).returncode
-	else:
-		rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
-	if rc != 0:
-		logger.error("An error during merging paired-end reads")
-	else:
+	rc = run_external(args, cmd)
+
+	if rc == 0:
 		reads['merged'] = merged
 		reads['pe_1'] = notmerged_r1
 		reads['pe_2'] = notmerged_r2
@@ -184,15 +210,10 @@ def merge_bb(args, reads, readdir):
 	if bb_trim:
 		cmd += ["qtrim2=t", f"trimq={bb_trimq}"]
 	logger.info("Merging paired-end reads.")
-	logger.debug("Running: " + " ".join(cmd))
 
-	if args.transparent:
-		rc = subprocess.run(cmd).returncode
-	else:
-		rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
-	if rc != 0:
-		logger.error("An error during merging paired-end reads")
-	else:
+	rc = run_external(args, cmd)
+
+	if rc == 0:
 		reads['merged'] = merged
 		reads['pe_1'] = notmerged_r1
 		reads['pe_2'] = notmerged_r2
@@ -200,19 +221,10 @@ def merge_bb(args, reads, readdir):
 	return reads
 
 
-def pe_read_processing(args, reads):
-	logger.info("Read processing started")
-	readdir = create_subdir(args.output_dir, "reads")
-	illumina_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/illumina.adapters.fasta")
-
+def trim_and_filter_pe(args, reads, readdir):
 	# Trimming and filtering constants
 	MINLEN = 55
 	WINDOW = 3
-
-	if args.adapters and os.path.isfile(args.adapters):
-		args.adapters = os.path.abspath(args.adapters)
-	else:
-		args.adapters = illumina_adapters
 
 	if "pe_1" in reads.keys() and "pe_2" in reads.keys():
 		logger.info("Trimming and filtering paired end reads")
@@ -220,16 +232,8 @@ def pe_read_processing(args, reads):
 		out_pe2 = os.path.join(readdir, "pe_2.fq")
 		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff), "-l", str(MINLEN),
 			"-w", str(WINDOW), "-o", out_pe1, "-o", out_pe2, args.adapters, reads["pe_1"], reads["pe_2"]]
-		logger.debug(" ".join(cmd))
-
-		if args.transparent:
-			rc = subprocess.run(cmd).returncode
-		else:
-			rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
-
-		if rc != 0:
-			logger.error("An error during processing paired-end reads")
-		else:
+		rc = run_external(args, cmd)
+		if rc == 0:
 			reads['pe_1'] = out_pe1
 			reads['pe_2'] = out_pe2
 
@@ -238,16 +242,9 @@ def pe_read_processing(args, reads):
 		out_single = os.path.join(readdir, "single.fq")
 		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff), "-l", str(MINLEN),
 			"-w", str(WINDOW), "-o", out_single, "n/a", reads["single"]]
-		logger.debug(" ".join(cmd))
 
-		if args.transparent:
-			rc = subprocess.run(cmd).returncode
-		else:
-			rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
-
-		if rc != 0:
-			logger.error("An error during processing single-end reads")
-		else:
+		rc = run_external(args, cmd)
+		if rc == 0:
 			reads['single'] = out_single
 
 	if "merged" in reads.keys():
@@ -255,17 +252,28 @@ def pe_read_processing(args, reads):
 		out = os.path.join(readdir, "merged.fq")
 		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff), "-l", str(MINLEN),
 			"-w", str(WINDOW), "-o", out, "n/a", reads["merged"]]
-		logger.debug(" ".join(cmd))
 
-		if args.transparent:
-			rc = subprocess.run(cmd).returncode
-		else:
-			rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
-
-		if rc != 0:
-			logger.error("An error during processing merged paired-end reads")
-		else:
+		rc = run_external(args, cmd)
+		if rc == 0:
 			reads['merged'] = out
+
+	return reads
+
+
+def pe_read_processing(args, reads):
+	logger.info("PE reads processing started")
+	readdir = create_subdir(args.output_dir, "reads")
+	illumina_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/illumina.adapters.fasta")
+
+	if args.adapters and os.path.isfile(args.adapters):
+		args.adapters = os.path.abspath(args.adapters)
+	else:
+		args.adapters = illumina_adapters
+
+	if args.filter_by_tile and "pe_1" in reads.keys() and "pe_2" in reads.keys():
+		reads = filter_by_tile(args, reads, readdir)
+
+	reads = trim_and_filter_pe(args, reads, readdir)
 
 	# Merging overlapping paired-end reads
 	if "merged" not in reads.keys() and "pe_1" in reads.keys() and "pe_2" in reads.keys():
@@ -329,12 +337,7 @@ def assemble(args, reads):
 		if args.spades_k_list:
 			cmd += ["-k", args.spades_k_list]
 
-		logger.debug("Running: " + " ".join(cmd))
-
-		if args.transparent:
-			rc = subprocess.run(cmd).returncode
-		else:
-			rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
+		rc = run_external(args, cmd)
 
 		if rc != 0:
 			logger.error("Genome assembly finished with errors.")
@@ -370,21 +373,45 @@ def assemble(args, reads):
 		if 'pacbio' in reads.keys():
 			cmd += ["-l", reads['pacbio']]
 
-		logger.debug("Running: " + " ".join(cmd))
-		if args.transparent:
-			rc = subprocess.run(cmd).returncode
-		else:
-			rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
+		rc = run_external(args, cmd)
+
 		if rc != 0:
 			logger.error("Genome assembly finished with errors.")
 			logger.error("Plese check %s for more information." % os.path.join(aslydir, "unicycler.log"))
 			raise Exception("Extermal software error")
 		else:
 			logger.debug("Assembling finished")
-			return os.path.join(aslydir, "assembly.fasta")
+			assembly = os.path.join(aslydir, "assembly.fasta")
+			if args.extract_replicons:
+				extract_replicons(args, aslydir)
+			return assembly
 
 	else:
 		logger.critical("Not yet implemented")
+		return None
+
+
+def extract_replicons(args, aslydir):
+	logfile = os.path.join(aslydir, "unicycler.log")
+	assemblyfile = os.path.join(aslydir, "assembly.fasta")
+	with open(logfile, "r") as log:
+	    regexp = re.compile(r'\s?\d+.+\scomplete')
+	    repl_lengths = []
+	    for l in log.readlines():
+	        if regexp.search(l):
+	            component, segments, links, length, _, _, status = l.split()
+	            if int(segments) == 1:
+	                repl_lengths.append(int(length.replace(",","")))
+	    logger.debug("Extracting " + str(len(repl_lengths)) + " replicon(s).")
+	    with open(assemblyfile, "r") as assembly:
+	        replicons = [x for x in SeqIO.parse(assembly, "fasta") if len(x) in repl_lengths]
+	        for x in range(len(replicons)):
+	            try:
+	                F = open(os.path.join(aslydir,f"replicon.{x+1}.fasta"),"w")
+	                SeqIO.write(replicons[x], F, "fasta")
+	                F.close()
+	            except Exception as e:
+	                raise e
 
 
 def locus_tag_gen(genome):
@@ -421,18 +448,7 @@ def annotate(args):
 	if args.minimum_length:
 		cmd += ["--minimum_length", args.minimum_length]
 
-	logger.debug("Running: " + " ".join(cmd))
-
-	if args.transparent:
-		try:
-			rc = subprocess.run(cmd).returncode
-		except Exception as e:
-			raise e
-	else:
-		try:
-			rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
-		except Exception as e:
-			raise e
+	rc = run_external(args, cmd)
 
 	return os.path.join(annodir, "genome.fna")
 
@@ -442,27 +458,29 @@ def check_phix(args):
 	phix_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"data/phiX174.fasta")
 	blast_format = "6 sseqid pident slen length"
 	cmd = ["blastn", "-query", phix_path, "-subject", args.genome, "-outfmt", blast_format, "-evalue", "1e-6"]
-	logger.debug("Running: " + " ".join(cmd))
 
+	logger.debug("Running: " + " ".join(cmd))
 	try:
-		blast_out = str(subprocess.run(cmd, universal_newlines=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout).rstrip().split('\n')
+		blast_out = str(subprocess.run(cmd, universal_newlines=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout).rstrip()
 	except Exception as e:
 		raise e
 
 	phix_contigs = []
-	for l in blast_out:
-		i, p, s, l = l.split("\t")
-		if float(p) > 95.0 and int(s)/int(l) > 0.5:
-			phix_contigs.append(i)
-	phix_contigs = list(set(phix_contigs))
+	if bool(blast_out):
+		for l in blast_out.split('\n'):
+			i, p, s, l = l.split("\t")
+			if float(p) > 95.0 and int(s)/int(l) > 0.5:
+				phix_contigs.append(i)
+		phix_contigs = list(set(phix_contigs))
 
-	if len(phix_contigs) > 0:
-		logger.info(f"PhiX was found in: {', '.join(phix_contigs)}")
-		newgenome = os.path.join(args.output_dir, "assembly.nophix.fasta")
-		records = [x for x in SeqIO.parse(args.genome, "fasta") if x.id not in phix_contigs]
-		with open(newgenome, "w") as handle:
-			SeqIO.write(records, handle, "fasta")
-			args.genome = newgenome
+		if len(phix_contigs) > 0:
+			logger.info(f"PhiX was found in: {', '.join(phix_contigs)}")
+			newgenome = os.path.join(args.output_dir, "assembly.nophix.fasta")
+			records = [x for x in SeqIO.parse(args.genome, "fasta") if x.id not in phix_contigs]
+			with open(newgenome, "w") as handle:
+				SeqIO.write(records, handle, "fasta")
+				args.genome = newgenome
+
 	return args.genome
 
 
@@ -476,7 +494,6 @@ def run_checkm(args):
 
 	checkm_outdir = os.path.join(args.output_dir, "checkm")
 	checkm_outfile = os.path.join(args.output_dir, "CheckM.txt")
-
 	checkm_ext = os.path.splitext(args.genome)[1]
 
 	if args.checkm_mode == "taxonomy_wf":
@@ -522,22 +539,16 @@ def run_checkm(args):
 			cmd += ["--reduced_tree"]
 		cmd += ["--pplacer_threads", str(args.threads), checkm_indir, checkm_outdir]
 
-	logger.info("Running: " + " ".join(cmd))
-
-	if args.transparent:
-		try:
-			rc = subprocess.run(cmd).returncode
-		except Exception as e:
-			raise e
-	else:
-		try:
-			rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
-		except Exception as e:
-			raise e
-
+	rc = run_external(args, cmd)
 	shutil.rmtree(checkm_indir)
 
 	return rc
+
+
+def check_last_step(args, step):
+	if args.last_step == step:
+		logger.info("Workflow finished!")
+		exit(0)
 
 
 def main():
@@ -569,10 +580,11 @@ def main():
 	fh.setFormatter(formatter)
 	logger.addHandler(fh)
 
-	logger.info("Start")
+	logger.info("Pipeline started")
 
 	steps = {"qc":1, "processing":2, "assembling":3, "annotation":5, "check_genome":4}
-	start_step_int=steps[args.step]
+	start_step_int = steps[args.first_step]
+	args.last_step = steps[args.last_step]
 	if start_step_int <= 3:
 		reads = check_reads(args)
 		logger.debug("Reads: " + str(reads))
@@ -580,18 +592,25 @@ def main():
 			logger.error("No reads provided for genome assembly")
 			raise Exception("No reads provided for genome assembly")
 
+	if start_step_int > 3 and (not args.genome or not os.path.isfile(args.genome)):
+		logger.error("Genome assembly is not provided")
+		raise FileNotFoundError()
+
 	# QC
 	if start_step_int == 1:
 		return_code = read_QC(args, reads)
+		check_last_step(args, 1)
 
 	# Processing
 	if start_step_int <= 2:
 		reads = pe_read_processing(args, reads)
-		logger.debug("Reads: " + str(reads))
+		logger.debug("Processed reads: " + str(reads))
+		check_last_step(args, 2)
 
 	# Assembly
 	if start_step_int <= 3:
 		args.genome = assemble(args, reads)
+		check_last_step(args, 3)
 
 	# Assembly QC
 	if start_step_int <= 4:
@@ -599,6 +618,7 @@ def main():
 		if args.check_phix:
 			args.genome = check_phix(args)
 		return_code = run_checkm(args)
+		check_last_step(args, 4)
 
 	# Annotation
 	if start_step_int <= 5:
@@ -606,8 +626,7 @@ def main():
 			logger.error("Genome assembly is not provided")
 			raise FileNotFoundError()
 		args.genome = annotate(args)
-
-	logger.info("Workflow finished!")
+		check_last_step(args, 5)
 
 
 if __name__ == "__main__":
