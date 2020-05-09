@@ -18,12 +18,13 @@ ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses sev
 * DFast
 * BioPython
 * blastn
+* NxTrim
 
 All of them may be installed using **conda**:
 
 It's highly recommended to create a new conda environment:
 
-`conda create -n newcoolenv python=3.7 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython`
+`conda create -n newcoolenv python=3.7 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython nxtrim`
 
 and activate it
 
@@ -32,7 +33,7 @@ and activate it
 
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install python>=3.6 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython`
+`conda install python>=3.6 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython nxtrim`
 
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
@@ -129,3 +130,4 @@ Altschul, S. F., Gish, W., Miller, W., Myers, E. W., & Lipman, D. J. (1990). Bas
 
 Cock, P. J., Antao, T., Chang, J. T., Chapman, B. A., Cox, C. J., Dalke, A., ... & De Hoon, M. J. (2009). Biopython: freely available Python tools for computational molecular biology and bioinformatics. Bioinformatics, 25(11), 1422-1423.
 
+O’Connell, J., et al. (2015) NxTrim: optimized trimming of Illumina mate pair reads. Bioinformatics 31(12), 2035-2037.

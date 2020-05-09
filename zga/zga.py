@@ -13,85 +13,91 @@ def parse_args():
 	parser = argparse.ArgumentParser(description="ZGA genome assembly and annotation pipeline")
 
 	# General options
-	parser.add_argument("-s", "--first-step", help="First step of the pipeline", default="qc",
+	general_args = parser.add_argument_group(title="General options", description="")
+	general_args.add_argument("-s", "--first-step", help="First step of the pipeline", default="qc",
 		choices=["qc", "processing", "assembling", "check_genome", "annotation"])
-	parser.add_argument("-l", "--last-step", help="Last step of the pipeline", default="annotation",
+	general_args.add_argument("-l", "--last-step", help="Last step of the pipeline", default="annotation",
 		choices=["qc", "processing", "assembling", "check_genome", "annotation"])
-	parser.add_argument("-o", "--output-dir", required=True, help="Output directory")
-	parser.add_argument("--force", action="store_true", help="Overwrite output directory if exists")
+	general_args.add_argument("-o", "--output-dir", required=True, help="Output directory")
+	general_args.add_argument("--force", action="store_true", help="Overwrite output directory if exists")
 	# parser.add_argument("--tmp-dir", default="zga-temp", help="Temporary directory")
-	parser.add_argument("-t", "--threads", type=int, default=1,
+	general_args.add_argument("-t", "--threads", type=int, default=1,
 		help="Number of CPU threads to use (where possible)")
-	parser.add_argument("-m", "--memory-limit", type=int, help="Memory limit in GB for SPAdes")
-	parser.add_argument("--genus", default="Unknown", help="Provide genus if known")
-	parser.add_argument("--species", default="sp.", help="Provide species if known")
-	parser.add_argument("--strain", help="Provide strain if known")
-	parser.add_argument("--transparent", action="store_true",
+	general_args.add_argument("-m", "--memory-limit", type=int, help="Memory limit in GB for SPAdes")
+	general_args.add_argument("--genus", default="Unknown", help="Provide genus if known")
+	general_args.add_argument("--species", default="sp.", help="Provide species if known")
+	general_args.add_argument("--strain", help="Provide strain if known")
+	general_args.add_argument("--transparent", action="store_true",
 		help="Show output from tools inside the pipeline")
-	parser.add_argument("--domain", default="bacteria", choices=['archaea', 'bacteria'],
+	general_args.add_argument("--domain", default="bacteria", choices=['archaea', 'bacteria'],
 		help="Provide prokaryotic domain: bacteria or archaea")
 
 	# Input
-	parser.add_argument("-1", "--pe-1", help="FASTQ file with first (left) paired-end reads")
-	parser.add_argument("-2", "--pe-2", help="FASTQ file with second (right) paired-end reads")
-	parser.add_argument("--pe-merged", help="FASTQ file  with merged overlapped paired-end reads")
-	parser.add_argument("-S", "--single-end", help="FASTQ file with unpaired or single-end reads")
-	parser.add_argument("--mp-1", help="Mate pair forward reads. SPAdes only")
-	parser.add_argument("--mp-2", help="Mate pair forward reads. SPAdes only")
+	input_args = parser.add_argument_group(title="Input files and options", description="")
+	input_args.add_argument("-1", "--pe-1", help="FASTQ file with first (left) paired-end reads")
+	input_args.add_argument("-2", "--pe-2", help="FASTQ file with second (right) paired-end reads")
+	input_args.add_argument("--pe-merged", help="FASTQ file  with merged overlapped paired-end reads")
+	input_args.add_argument("-S", "--single-end", help="FASTQ file with unpaired or single-end reads")
+	input_args.add_argument("--mp-1", help="Mate pair forward reads. SPAdes only")
+	input_args.add_argument("--mp-2", help="Mate pair forward reads. SPAdes only")
 	# parser.add_argument("--pe-interleaved", help="Pair-end interleaved reads")
 	# parser.add_argument("--mp-interleaved", help="Mate pair interleaved reads")
 	# parser.add_argument("--phred-offset", help="")
-	parser.add_argument("--pacbio", help="PacBio reads")
-	parser.add_argument("--nanopore", help="Nanopore reads")
+	input_args.add_argument("--pacbio", help="PacBio reads")
+	input_args.add_argument("--nanopore", help="Nanopore reads")
 
-	# Short read processing
-	parser.add_argument("-q", "--quality-cutoff", type=int, default=25,
+	# Read processing
+	reads_args = parser.add_argument_group(title="Setting for processing of reads")
+	reads_args.add_argument("-q", "--quality-cutoff", type=int, default=25,
 		help="Base quality cutoff for short reads")
-	parser.add_argument("--adapters", help="Adapter sequences for trimming from short reads")
-	parser.add_argument("--merge-with", default="bbmerge", choices=["bbmerge", "seqprep"],
+	reads_args.add_argument("--adapters", help="Adapter sequences for trimming from short reads")
+	reads_args.add_argument("--merge-with", default="bbmerge", choices=["bbmerge", "seqprep"],
 		help="Tool for merging overlapping paired-end reads: bbmerge (default) or seqprep")
-	parser.add_argument("--filter-by-tile", action="store_true",
+	reads_args.add_argument("--filter-by-tile", action="store_true",
 		help="Filter reads based on positional quality over a flowcell.")
+	#Mate pair read processing
+	reads_args.add_argument("--use-unknown-mp", action="store_true",
+		help="Include reads that are probably mate pairs (default: only known MP used)")
 
 	# Assembly
-	parser.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler"],
+	asly_args = parser.add_argument_group(title="Assembly settings")
+	asly_args.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler"],
 		help="Assembler: unicycler (default, better quality, may use only long reads,) or spades (faster, may use mate-pair reads).")
-	parser.add_argument("--no-correction", action="store_true", help="Disable read correction")
-
+	asly_args.add_argument("--no-correction", action="store_true", help="Disable read correction")
 	# Spades options
-	parser.add_argument("--use-scaffolds", action="store_true",
+	asly_args.add_argument("--use-scaffolds", action="store_true",
 		help="SPAdes: Use assembled scaffolds.")
-	parser.add_argument("--spades-k-list",
+	asly_args.add_argument("--spades-k-list",
 		help="List of kmers for Spades, even comma-separated numbers e.g. '21,33,55,77'")
-
 	# Unicycler options
-	parser.add_argument("--unicycler-mode", default="normal", choices=['conservative', 'normal', 'bold'],
+	asly_args.add_argument("--unicycler-mode", default="normal", choices=['conservative', 'normal', 'bold'],
 		help="Mode of unicycler assembler: conservative, normal (default) or bold.")
-	parser.add_argument("--linear-seqs", default=0, help="Expected number of linear sequences")
-	parser.add_argument("--extract-replicons", action="store_true",
+	asly_args.add_argument("--linear-seqs", default=0, help="Expected number of linear sequences")
+	asly_args.add_argument("--extract-replicons", action="store_true",
 		help="Extract replicons (e.g. plasmids) from Unicycler assembly to separate files")
 
-	# Annotation
-	parser.add_argument("-g", "--genome", help="Genome assembly when starting from annotation.")
-	parser.add_argument("--gcode", default=11, type=int, help="Genetic code.")
-	parser.add_argument("--locus-tag",
-		help="Locus tag prefix. If not provided prefix will be generated from MD5 checksum.")
-	parser.add_argument("--locus-tag-inc", default=10, type=int,
-		help="Locus tag increment, default = 10")
-	parser.add_argument("--center-name", help="Genome center name.")
-	parser.add_argument("--minimum-length", help="Minimum sequence length in genome assembly.")
-
+	check_args = parser.add_argument_group(title="Genome check settings")
 	# phiX
-	parser.add_argument("--check-phix", action="store_true",
+	check_args.add_argument("--check-phix", action="store_true",
 		help="Check genome for presence of PhiX control sequence.")
-
 	# CheckM
-	parser.add_argument("--checkm-mode", default="taxonomy_wf", choices=['taxonomy_wf', 'lineage_wf'],
+	check_args.add_argument("--checkm-mode", default="taxonomy_wf", choices=['taxonomy_wf', 'lineage_wf'],
 		help="Select CheckM working mode. Default is checking for domain-specific marker-set.")
-	parser.add_argument("--checkm-rank", help="Rank of taxon for CheckM. Run 'checkm taxon_list' for details.")
-	parser.add_argument("--checkm-taxon", help="Taxon for CheckM. Run 'checkm taxon_list' for details.")
-	parser.add_argument("--checkm-full-tree", action="store_true",
+	check_args.add_argument("--checkm-rank", help="Rank of taxon for CheckM. Run 'checkm taxon_list' for details.")
+	check_args.add_argument("--checkm-taxon", help="Taxon for CheckM. Run 'checkm taxon_list' for details.")
+	check_args.add_argument("--checkm-full-tree", action="store_true",
 		help="Use full tree for inference of marker set, requires LOTS of memory.")
+
+	anno_args = parser.add_argument_group(title="Annotation settings")
+	# Annotation
+	anno_args.add_argument("-g", "--genome", help="Genome assembly (when starting from annotation).")
+	anno_args.add_argument("--gcode", default=11, type=int, help="Genetic code.")
+	anno_args.add_argument("--locus-tag",
+		help="Locus tag prefix. If not provided prefix will be generated from MD5 checksum.")
+	anno_args.add_argument("--locus-tag-inc", default=10, type=int,
+		help="Locus tag increment, default = 10")
+	anno_args.add_argument("--center-name", help="Genome center name.")
+	anno_args.add_argument("--minimum-length", help="Minimum sequence length in genome assembly.")
 
 	return parser.parse_args()
 
@@ -260,8 +266,8 @@ def trim_and_filter_pe(args, reads, readdir):
 	return reads
 
 
-def pe_read_processing(args, reads):
-	logger.info("PE reads processing started")
+def read_processing(args, reads):
+	logger.info("Reads processing started")
 	readdir = create_subdir(args.output_dir, "reads")
 	illumina_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/illumina.adapters.fasta")
 
@@ -282,7 +288,34 @@ def pe_read_processing(args, reads):
 		else:
 			reads = merge_seqprep(args, reads, readdir)
 
+	if "mp_1" in reads.keys():
+		reads = mp_read_processing(args, reads,readdir)
+
 	logger.info("Read processing finished")
+
+	return reads
+
+
+def mp_read_processing(args, reads,readdir):
+	prefix = os.path.join(readdir, "nxtrim")
+	MINLENGTH = 31
+
+	cmd = ["nxtrim", "-1", reads['mp_1'], "-2", reads['mp_2'], "--separate"]
+	cmd += ["--justmp", "-O", prefix, "-l", str(MINLENGTH)]
+	rc = run_external(args, cmd)
+	'''
+	if args.use_unknown_mp:
+		cmd = ["zcat", f"{prefix}_R1*", ">", f"{prefix}_R1.all.fastq.gz"]
+		rc1 = run_external(args, cmd)
+		cmd = ["zcat", f"{prefix}_R2*", ">", f"{prefix}_R2.all.fastq.gz"]
+		rc2 = run_external(args, cmd)
+		if rc1 == 0 and rc2 == 0:
+			reads['mp_1'] = f"{prefix}_R1.all.fastq.gz"
+			reads['mp_2'] = f"{prefix}_R2.all.fastq.gz"
+	else:
+		'''
+	reads['mp_1'] = f"{prefix}_R1.mp.fastq.gz"
+	reads['mp_2'] = f"{prefix}_R2.mp.fastq.gz"
 
 	return reads
 
@@ -299,12 +332,13 @@ def assemble(args, reads):
 		# Check Spades and get it's version to use verion-specific features
 		# as "--merged", "--isolate" etc.
 		try:
-			spades_help = str(subprocess.run(["spades.py"], stdout=subprocess.PIPE,
+			spades_version = str(subprocess.run(["spades.py", "-v"], stdout=subprocess.PIPE,
 				stderr=subprocess.PIPE, universal_newlines=True).stdout)
 		except Exception as e:
 			logger.error("Failed to run \"spades\"")
 			raise e
-		version = re.search(r'(?<=v)\d\S+', spades_help).group(0)
+		#version = re.search(r'(?<=v)\d\S+', spades_help).group(0)
+		version = re.search(r'[\d\.]+', spades_version)[0]
 		logger.debug("Spades version %s detected" % version)
 
 		'''
@@ -603,7 +637,7 @@ def main():
 
 	# Processing
 	if start_step_int <= 2:
-		reads = pe_read_processing(args, reads)
+		reads = read_processing(args, reads)
 		logger.debug("Processed reads: " + str(reads))
 		check_last_step(args, 2)
 
