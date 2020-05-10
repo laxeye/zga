@@ -303,19 +303,22 @@ def mp_read_processing(args, reads,readdir):
 	cmd = ["nxtrim", "-1", reads['mp_1'], "-2", reads['mp_2'], "--separate"]
 	cmd += ["--justmp", "-O", prefix, "-l", str(MINLENGTH)]
 	rc = run_external(args, cmd)
-	'''
 	if args.use_unknown_mp:
-		cmd = ["zcat", f"{prefix}_R1*", ">", f"{prefix}_R1.all.fastq.gz"]
-		rc1 = run_external(args, cmd)
-		cmd = ["zcat", f"{prefix}_R2*", ">", f"{prefix}_R2.all.fastq.gz"]
-		rc2 = run_external(args, cmd)
-		if rc1 == 0 and rc2 == 0:
-			reads['mp_1'] = f"{prefix}_R1.all.fastq.gz"
-			reads['mp_2'] = f"{prefix}_R2.all.fastq.gz"
+		with open(f"{prefix}_R1.all.fastq.gz", "wb") as dest:
+			with open(f"{prefix}_R1.mp.fastq.gz", "rb") as src:
+				shutil.copyfileobj(src, dest)
+			with open(f"{prefix}_R1.unknown.fastq.gz", "rb") as src:
+				shutil.copyfileobj(src, dest)
+		with open(f"{prefix}_R2.all.fastq.gz", "wb") as dest:
+			with open(f"{prefix}_R2.mp.fastq.gz", "rb") as src:
+				shutil.copyfileobj(src, dest)
+			with open(f"{prefix}_R2.unknown.fastq.gz", "rb") as src:
+				shutil.copyfileobj(src, dest)
+		reads['mp_1'] = f"{prefix}_R1.all.fastq.gz"
+		reads['mp_2'] = f"{prefix}_R2.all.fastq.gz"
 	else:
-		'''
-	reads['mp_1'] = f"{prefix}_R1.mp.fastq.gz"
-	reads['mp_2'] = f"{prefix}_R2.mp.fastq.gz"
+		reads['mp_1'] = f"{prefix}_R1.mp.fastq.gz"
+		reads['mp_2'] = f"{prefix}_R2.mp.fastq.gz"
 
 	return reads
 
@@ -360,7 +363,7 @@ def assemble(args, reads):
 			cmd += ["--merged", reads['merged']]
 		if 'single' in reads.keys():
 			cmd += ["-s", reads['single']]
-		if 'mp_1' in reads.keys() and ',mp_2' in reads.keys():
+		if 'mp_1' in reads.keys() and 'mp_2' in reads.keys():
 			cmd += ["--mp1-1", reads['mp_1'], "--mp1-2", reads['mp_2']]
 		if 'nanopore' in reads.keys():
 			cmd += ["--nanopore", reads['nanopore']]
