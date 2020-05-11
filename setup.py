@@ -4,8 +4,8 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="zga", # Replace with your own username
-    version="0.0.2",
+    name="zga",
+    version="0.0.3",
     author="Aleksei Korzhenkov",
     author_email="oscypek@ya.ru",
     description="Prokaryotic genome assembly and annotation pipeline",
