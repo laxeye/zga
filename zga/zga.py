@@ -33,7 +33,8 @@ def parse_args():
 		help="Provide prokaryotic domain: bacteria or archaea")
 
 	# Input
-	input_args = parser.add_argument_group(title="Input files and options", description="")
+	input_args = parser.add_argument_group(title="Input files and options",
+		description="Sequencing reads should be in FASTQ format and may be GZipped.")
 	input_args.add_argument("-1", "--pe-1", help="FASTQ file with first (left) paired-end reads")
 	input_args.add_argument("-2", "--pe-2", help="FASTQ file with second (right) paired-end reads")
 	input_args.add_argument("--pe-merged", help="FASTQ file  with merged overlapped paired-end reads")
@@ -49,8 +50,9 @@ def parse_args():
 	# Read processing
 	reads_args = parser.add_argument_group(title="Setting for processing of reads")
 	reads_args.add_argument("-q", "--quality-cutoff", type=int, default=25,
-		help="Base quality cutoff for short reads")
-	reads_args.add_argument("--adapters", help="Adapter sequences for trimming from short reads")
+		help="Base quality cutoff for short reads, default: 25")
+	reads_args.add_argument("--adapters", 
+		help="FASTA file with adapter sequences for trimming from short reads. By default Illumina adapter sequences are used.")
 	reads_args.add_argument("--merge-with", default="bbmerge", choices=["bbmerge", "seqprep"],
 		help="Tool for merging overlapping paired-end reads: bbmerge (default) or seqprep")
 	reads_args.add_argument("--filter-by-tile", action="store_true",
@@ -62,19 +64,19 @@ def parse_args():
 	# Assembly
 	asly_args = parser.add_argument_group(title="Assembly settings")
 	asly_args.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler"],
-		help="Assembler: unicycler (default, better quality, may use only long reads,) or spades (faster, may use mate-pair reads).")
+		help="Assembler: unicycler (default; better quality, may use only long reads) or spades (faster, may use mate-pair reads).")
 	asly_args.add_argument("--no-correction", action="store_true", help="Disable read correction")
 	# Spades options
 	asly_args.add_argument("--use-scaffolds", action="store_true",
 		help="SPAdes: Use assembled scaffolds.")
 	asly_args.add_argument("--spades-k-list",
-		help="List of kmers for Spades, even comma-separated numbers e.g. '21,33,55,77'")
+		help="SPAdes: List of kmers, comma-separated even numbers e.g. '21,33,55,77'")
 	# Unicycler options
 	asly_args.add_argument("--unicycler-mode", default="normal", choices=['conservative', 'normal', 'bold'],
-		help="Mode of unicycler assembler: conservative, normal (default) or bold.")
+		help="Unicycler: assember mode: conservative, normal (default) or bold.")
 	asly_args.add_argument("--linear-seqs", default=0, help="Expected number of linear sequences")
 	asly_args.add_argument("--extract-replicons", action="store_true",
-		help="Extract replicons (e.g. plasmids) from Unicycler assembly to separate files")
+		help="Unicycler: extract replicons (e.g. plasmids) from the assembly to separate files")
 
 	check_args = parser.add_argument_group(title="Genome check settings")
 	# phiX
