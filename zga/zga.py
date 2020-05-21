@@ -175,7 +175,7 @@ def filter_by_tile(args, reads, readdir):
 	filtered_pe_r1 = os.path.join(readdir, "filtered_pe_r1.fq.gz")
 	filtered_pe_r2 = os.path.join(readdir, "filtered_pe_r2.fq.gz")
 
-	cmd = ["filterbytile.sh", f"in={reads[pe_1]}", f"in2={reads[pe_2]}",
+	cmd = ["filterbytile.sh", f"in={reads['pe_1']}", f"in2={reads['pe_2']}",
 	f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}"]
 
 	rc = run_external(args, cmd)
