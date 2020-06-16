@@ -457,7 +457,8 @@ def extract_replicons(args, aslydir):
 def locus_tag_gen(genome):
 	logger.info("No locus tag provided. Generating it as MD5 hash of genome")
 	with open(genome, 'rb') as genomefile:
-		locus_tag = "".join([chr(ord(x) + 17).upper() for x in hashlib.md5(genomefile.read()).hexdigest()[0:6]])
+		digest = hashlib.md5(genomefile.read()).hexdigest()
+		locus_tag = "".join([chr(65 + (int(digest[x],16) + int(digest[x+1],16)) % 26) for x in range(0,12,2)])
 		logger.info("Locus tag generated: %s" % locus_tag)
 		return locus_tag
 
