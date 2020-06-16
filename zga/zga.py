@@ -398,7 +398,8 @@ def assemble(args, reads):
 			logger.critical("Failed to run \'Unicycler\'.")
 			raise e
 
-		cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads)]
+		cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads),
+			"--mode", args.unicycler_mode]
 		if 'pe_1' in reads.keys() and 'pe_2' in reads.keys():
 			cmd += ["-1", reads['pe_1'], "-2", reads['pe_2']]
 		if args.no_correction:
