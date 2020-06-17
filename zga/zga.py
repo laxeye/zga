@@ -624,37 +624,37 @@ def main():
 	logger.info("Pipeline started")
 
 	steps = {"qc":1, "processing":2, "assembling":3, "annotation":5, "check_genome":4}
-	start_step_int = steps[args.first_step]
+	args.first_step = steps[args.first_step]
 	args.last_step = steps[args.last_step]
-	if start_step_int <= 3:
+	if args.first_step <= 3:
 		reads = check_reads(args)
 		logger.debug("Reads: " + str(reads))
 		if len(list(reads)) == 0:
 			logger.error("No reads provided for genome assembly")
 			raise Exception("No reads provided for genome assembly")
 
-	if start_step_int > 3 and (not args.genome or not os.path.isfile(args.genome)):
+	if args.first_step > 3 and (not args.genome or not os.path.isfile(args.genome)):
 		logger.error("Genome assembly is not provided")
 		raise FileNotFoundError()
 
 	# QC
-	if start_step_int == 1:
+	if args.first_step == 1:
 		return_code = read_QC(args, reads)
 		check_last_step(args, 1)
 
 	# Processing
-	if start_step_int <= 2:
+	if args.first_step <= 2:
 		reads = read_processing(args, reads)
 		logger.debug("Processed reads: " + str(reads))
 		check_last_step(args, 2)
 
 	# Assembly
-	if start_step_int <= 3:
+	if args.first_step <= 3:
 		args.genome = assemble(args, reads)
 		check_last_step(args, 3)
 
 	# Assembly QC
-	if start_step_int <= 4:
+	if args.first_step <= 4:
 		logger.info("Checking genome quality")
 		if args.check_phix:
 			args.genome = check_phix(args)
@@ -662,7 +662,7 @@ def main():
 		check_last_step(args, 4)
 
 	# Annotation
-	if start_step_int <= 5:
+	if args.first_step <= 5:
 		if not args.genome or not os.path.isfile(args.genome):
 			logger.error("Genome assembly is not provided")
 			raise FileNotFoundError()
