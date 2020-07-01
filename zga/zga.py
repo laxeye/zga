@@ -534,7 +534,7 @@ def run_checkm(args):
 		raise e
 
 	checkm_outdir = os.path.join(args.output_dir, "checkm")
-	checkm_outfile = os.path.join(args.output_dir, "CheckM.txt")
+	checkm_outfile = os.path.join(args.output_dir, "checkm.result.txt")
 	checkm_ext = os.path.splitext(args.genome)[1]
 
 	if args.checkm_mode == "taxonomy_wf":
@@ -546,13 +546,6 @@ def run_checkm(args):
 				universal_newlines=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout)
 		except Exception as e:
 			raise e
-
-		'''
-		checkm_ranks = ['life','domain','phylum','class','order','family','genus','species']
-		if args.checkm_rank and args.checkm_rank not in checkm_ranks:
-			logger.error("Wrong taxon rank for CheckM. Reset to domain.")
-			args.checkm_rank = None
-		'''
 
 		if args.checkm_taxon and args.checkm_rank:
 			found = False
@@ -573,7 +566,6 @@ def run_checkm(args):
 
 		cmd += [args.checkm_rank, args.checkm_taxon, checkm_indir, checkm_outdir]
 
-
 	else:
 		cmd = ["checkm", "lineage_wf", "-f", checkm_outfile, "-t", str(args.threads), "-x", checkm_ext]
 		if not args.checkm_full_tree:
@@ -581,9 +573,15 @@ def run_checkm(args):
 		cmd += ["--pplacer_threads", str(args.threads), checkm_indir, checkm_outdir]
 
 	rc = run_external(args, cmd)
-	shutil.rmtree(checkm_indir)
 
-	return rc
+	# Cleaning after CheckM
+	shutil.rmtree(checkm_indir)
+	shutil.rmtree(checkm_outdir)
+
+	if rc == 0:
+		return checkm_outfile
+	else:
+		return None
 
 
 def check_last_step(args, step):
@@ -658,7 +656,15 @@ def main():
 		logger.info("Checking genome quality")
 		if args.check_phix:
 			args.genome = check_phix(args)
-		return_code = run_checkm(args)
+		checkm_outfile = run_checkm(args)
+		if checkm_outfile:
+			with open(checkm_outfile) as result:
+				completeness, contamination, heterogeneity =  list(map(float, result.readlines()[3].split()[-3::1]))
+				if float(completeness) < 80.0 or (float(completeness) - 5.0 * float(contamination) < 50.0):
+					logger.info("The genome assembly has low quality!")
+				logger.info(f"Genome completeness: {completeness}%")
+				logger.info(f"Genome contamination: {contamination}%")
+				logger.info(f"Genome heterogeneity: {heterogeneity}%")
 		check_last_step(args, 4)
 
 	# Annotation
