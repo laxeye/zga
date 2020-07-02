@@ -202,7 +202,7 @@ def merge_seqprep(args, reads, readdir):
 	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
 	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
 	merged = os.path.join(readdir, "merged.fq.gz")
-	cmd = ["seqprep", "-f", reads['pe'][0], "-r", reads['pe'][1], "-1", notmerged_r1,
+	cmd = ["SeqPrep", "-f", reads['pe'][0], "-r", reads['pe'][1], "-1", notmerged_r1,
 		"-2", notmerged_r2, "-s", merged]
 	logger.info("Merging paired-end reads.")
 
