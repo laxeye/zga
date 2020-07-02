@@ -190,6 +190,9 @@ def filter_by_tile(args, reads, readdir):
 	rc = run_external(args, cmd)
 
 	if rc == 0:
+		for f in reads['pe']:
+			if os.path.dirname(f) == readdir and os.path.exists(f):
+				os.remove(f)
 		reads['pe'] = (filtered_pe_r1, filtered_pe_r2)
 
 	return reads
@@ -206,6 +209,9 @@ def merge_seqprep(args, reads, readdir):
 	rc = run_external(args, cmd)
 
 	if rc == 0:
+		for f in reads['pe']:
+			if os.path.dirname(f) == readdir and os.path.exists(f):
+				os.remove(f)
 		reads['merged'] = merged
 		reads['pe'] = (notmerged_r1, notmerged_r2)
 
@@ -229,6 +235,9 @@ def merge_bb(args, reads, readdir):
 	rc = run_external(args, cmd)
 
 	if rc == 0:
+		for f in reads['pe']:
+			if os.path.dirname(f) == readdir and os.path.exists(f):
+				os.remove(f)
 		reads['merged'] = merged
 		reads['pe'] = (notmerged_r1, notmerged_r2)
 
