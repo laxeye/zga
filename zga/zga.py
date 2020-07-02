@@ -57,6 +57,8 @@ def parse_args():
 		help="Tool for merging overlapping paired-end reads: bbmerge (default) or seqprep")
 	reads_args.add_argument("--filter-by-tile", action="store_true",
 		help="Filter reads based on positional quality over a flowcell.")
+	reads_args.add_argument("--genome-size-estimation", action="store_true",
+		help="Estimate genome size with mash")
 	#Mate pair read processing
 	reads_args.add_argument("--use-unknown-mp", action="store_true",
 		help="Include reads that are probably mate pairs (default: only known MP used)")
@@ -151,16 +153,19 @@ def create_subdir(parent, child):
 	return path
 
 
-def run_external(args, cmd):
+def run_external(args, cmd, return_code=True):
 	logger.debug("Running: " + " ".join(cmd))
-	if args.transparent:
-		rc = subprocess.run(cmd).returncode
+	if not return_code or not args.transparent:
+		r = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, encoding="utf-8")
 	else:
-		rc = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE).returncode
-	if rc != 0:
+		r = subprocess.run(cmd)
+	if r.returncode != 0:
 		logger.error(f'Non-zero return code of "{" ".join(cmd)}"')
 
-	return rc
+	if return_code:
+		return r.returncode
+	else:
+		return r
 
 
 def read_QC(args, reads):
@@ -231,7 +236,7 @@ def merge_bb(args, reads, readdir):
 
 def trim_and_filter_pe(args, reads, readdir):
 	# Trimming and filtering constants
-	MINLEN = 55
+	MINLEN = 33
 	WINDOW = 3
 
 	if "pe_1" in reads.keys() and "pe_2" in reads.keys():
@@ -291,11 +296,48 @@ def read_processing(args, reads):
 			reads = merge_seqprep(args, reads, readdir)
 
 	if "mp_1" in reads.keys():
-		reads = mp_read_processing(args, reads,readdir)
+		reads = mp_read_processing(args, reads, readdir)
 
 	logger.info("Read processing finished")
 
 	return reads
+
+
+def mash_estimate(args, reads):
+	# Minimum copy number of k-mer to include it
+	MINIMUM_COPIES = 3
+
+	reads_to_sketch=[]
+	short_reads=['pe_1', 'pe_2', 'merged', 'single']
+	for key in short_reads:
+		if key in reads.keys():
+			reads_to_sketch.append(reads[key])
+			readdirname=os.path.dirname(reads[key])
+	if len(reads_to_sketch) == 0:
+		logger.error("Not possible to estimate gemome size: short reads missing")
+		return None
+
+	sketchprefix=os.path.join(readdirname, "sketch")	
+	cmd = ["mash", "sketch", "-r", "-m", str(MINIMUM_COPIES), "-o", sketchprefix]
+	cmd += reads_to_sketch
+	r = run_external(args, cmd, False)
+
+	'''
+	Parsing mash output to extract estimated genome size
+	from lines looking like:
+	Estimated genome size: 1.234e+06
+	Estimated coverage:    23.644
+	We create list of tuples (size, coverage), sort it and get value with greatest covarage.
+	'''
+	if r.returncode == 0:
+		result = r.stderr.split("\n")
+		estimations = [float(x.split()[-1]) for x in result if "Estimated" in x.split()]
+		best_estimation = sorted(zip(estimations[::2], estimations[1::2]), key=lambda x: -x[1])[0]
+		logger.info(f"Estimated genome size is {int(best_estimation[0])} at coverage {best_estimation[1]}.")
+	else:
+		logger.error("Genome size estimation with \"mash\" failed.")
+
+	return r.returncode
 
 
 def mp_read_processing(args, reads,readdir):
@@ -644,6 +686,8 @@ def main():
 	if args.first_step <= 2:
 		reads = read_processing(args, reads)
 		logger.debug("Processed reads: " + str(reads))
+		if args.genome_size_estimation:
+			mash_estimate(args, reads)
 		check_last_step(args, 2)
 
 	# Assembly

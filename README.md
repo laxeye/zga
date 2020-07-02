@@ -33,7 +33,7 @@ and activate it
 
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install python>=3.6 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython nxtrim`
+`conda install python>=3.6 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython nxtrim mash`
 
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
@@ -131,3 +131,5 @@ Altschul, S. F., Gish, W., Miller, W., Myers, E. W., & Lipman, D. J. (1990). Bas
 Cock, P. J., Antao, T., Chang, J. T., Chapman, B. A., Cox, C. J., Dalke, A., ... & De Hoon, M. J. (2009). Biopython: freely available Python tools for computational molecular biology and bioinformatics. Bioinformatics, 25(11), 1422-1423.
 
 O’Connell, J., et al. (2015) NxTrim: optimized trimming of Illumina mate pair reads. Bioinformatics 31(12), 2035-2037.
+
+Ondov, B.D., Treangen, T.J., Melsted, P. et al. Mash: fast genome and metagenome distance estimation using MinHash. Genome Biol 17, 132 (2016). doi: 10.1186/s13059-016-0997-x
