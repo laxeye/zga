@@ -19,16 +19,17 @@ ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses sev
 * BioPython
 * blastn
 * NxTrim
+* mash
 
 All of them may be installed using **conda**:
 
 It's highly recommended to create a new conda environment:
 
-`conda create -n newcoolenv python=3.7 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython nxtrim`
+`conda create -n zga python=3.7 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython nxtrim mash`
 
 and activate it
 
-`conda activate newcoolenv`
+`conda activate zga`
 
 
 Otherwise you may install dependencies to existing conda environment:
@@ -51,7 +52,7 @@ Run `pip install zga` it will check if You have Biopython and istall it if not. 
 
 ### Operating systems requirements
 
-ZGA was tested on Ubuntu 18.04. Most probably any modern 64-bit Linux distribuition is enough.
+ZGA was tested on Ubuntu 18.04 and 19.10. Most probably any modern 64-bit Linux distribuition is enough.
 
 Your feedback on other OS is welcome!
 
