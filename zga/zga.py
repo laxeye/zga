@@ -119,15 +119,13 @@ def check_reads(args):
 			raise FileNotFoundError("File %s doesn't exist" % f)
 
 	if args.pe_1 and args.pe_2:
-		reads['pe_1'] = os.path.abspath(args.pe_1)
-		reads['pe_2'] = os.path.abspath(args.pe_2)
+		reads['pe'] = (os.path.abspath(args.pe_1), os.path.abspath(args.pe_2))
 	elif args.pe_1 or args.pe_2:
 		logger.error("Single end reads provided as paired. Please use \"--single-end\" option")
 		exit(1)
 
 	if args.mp_1 and args.mp_2:
-		reads['mp_1'] = os.path.abspath(args.mp_1)
-		reads['mp_2'] = os.path.abspath(args.mp_2)
+		reads['mp'] = (os.path.abspath(args.mp_1), os.path.abspath(args.mp_2))
 
 	if args.pe_merged:
 		reads['merged'] = os.path.abspath(args.pe_merged)
@@ -171,7 +169,13 @@ def run_external(args, cmd, return_code=True):
 def read_QC(args, reads):
 	logger.info("Read quality control started")
 	qcoutdir = create_subdir(args.output_dir, "QC")
-	cmd = ["fastqc", "-q", "-t", str(args.threads), "-o", qcoutdir] + list(reads.values())
+	reads_to_qc = []
+	for r in reads.values():
+		if len(r) > 1:
+			reads_to_qc += list(r)
+		else:
+			reads_to_qc.append(r)
+	cmd = ["fastqc", "-q", "-t", str(args.threads), "-o", qcoutdir] + reads_to_qc
 
 	return run_external(args, cmd)
 
@@ -180,14 +184,16 @@ def filter_by_tile(args, reads, readdir):
 	filtered_pe_r1 = os.path.join(readdir, "filtered_pe_r1.fq.gz")
 	filtered_pe_r2 = os.path.join(readdir, "filtered_pe_r2.fq.gz")
 
-	cmd = ["filterbytile.sh", f"in={reads['pe_1']}", f"in2={reads['pe_2']}",
+	cmd = ["filterbytile.sh", f"in={reads['pe'][0]}", f"in2={reads['pe'][1]}",
 	f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}"]
 
 	rc = run_external(args, cmd)
 
 	if rc == 0:
-		reads['pe_1'] = filtered_pe_r1
-		reads['pe_2'] = filtered_pe_r2
+		for f in reads['pe']:
+			if os.path.dirname(f) == readdir and os.path.exists(f):
+				os.remove(f)
+		reads['pe'] = (filtered_pe_r1, filtered_pe_r2)
 
 	return reads
 
@@ -196,16 +202,18 @@ def merge_seqprep(args, reads, readdir):
 	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
 	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
 	merged = os.path.join(readdir, "merged.fq.gz")
-	cmd = ["seqprep", "-f", reads['pe_1'], "-r", reads['pe_2'], "-1", notmerged_r1,
+	cmd = ["SeqPrep", "-f", reads['pe'][0], "-r", reads['pe'][1], "-1", notmerged_r1,
 		"-2", notmerged_r2, "-s", merged]
 	logger.info("Merging paired-end reads.")
 
 	rc = run_external(args, cmd)
 
 	if rc == 0:
+		for f in reads['pe']:
+			if os.path.dirname(f) == readdir and os.path.exists(f):
+				os.remove(f)
 		reads['merged'] = merged
-		reads['pe_1'] = notmerged_r1
-		reads['pe_2'] = notmerged_r2
+		reads['pe'] = (notmerged_r1, notmerged_r2)
 
 	return reads
 
@@ -218,7 +226,7 @@ def merge_bb(args, reads, readdir):
 	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
 	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
 	merged = os.path.join(readdir, "merged.fq.gz")
-	cmd = ["bbmerge.sh", f"in1={reads['pe_1']}", f"in2={reads['pe_2']}",
+	cmd = ["bbmerge.sh", f"in1={reads['pe'][0]}", f"in2={reads['pe'][1]}",
 		f"outu1={notmerged_r1}", f"outu2={notmerged_r2}", f"out={merged}"]
 	if bb_trim:
 		cmd += ["qtrim2=t", f"trimq={bb_trimq}"]
@@ -227,9 +235,11 @@ def merge_bb(args, reads, readdir):
 	rc = run_external(args, cmd)
 
 	if rc == 0:
+		for f in reads['pe']:
+			if os.path.dirname(f) == readdir and os.path.exists(f):
+				os.remove(f)
 		reads['merged'] = merged
-		reads['pe_1'] = notmerged_r1
-		reads['pe_2'] = notmerged_r2
+		reads['pe'] = (notmerged_r1, notmerged_r2)
 
 	return reads
 
@@ -239,16 +249,15 @@ def trim_and_filter_pe(args, reads, readdir):
 	MINLEN = 33
 	WINDOW = 3
 
-	if "pe_1" in reads.keys() and "pe_2" in reads.keys():
+	if "pe" in reads.keys():
 		logger.info("Trimming and filtering paired end reads")
 		out_pe1 = os.path.join(readdir, "pe_1.fq")
 		out_pe2 = os.path.join(readdir, "pe_2.fq")
 		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff), "-l", str(MINLEN),
-			"-w", str(WINDOW), "-o", out_pe1, "-o", out_pe2, args.adapters, reads["pe_1"], reads["pe_2"]]
+			"-w", str(WINDOW), "-o", out_pe1, "-o", out_pe2, args.adapters, reads['pe'][0], reads['pe'][1]]
 		rc = run_external(args, cmd)
 		if rc == 0:
-			reads['pe_1'] = out_pe1
-			reads['pe_2'] = out_pe2
+			reads['pe'] = (out_pe1, out_pe2)
 
 	if "single" in reads.keys():
 		logger.info("Trimming and filtering single end reads")
@@ -283,19 +292,20 @@ def read_processing(args, reads):
 	else:
 		args.adapters = illumina_adapters
 
-	if args.filter_by_tile and "pe_1" in reads.keys() and "pe_2" in reads.keys():
+	if args.filter_by_tile and "pe" in reads.keys():
 		reads = filter_by_tile(args, reads, readdir)
 
 	reads = trim_and_filter_pe(args, reads, readdir)
 
 	# Merging overlapping paired-end reads
-	if "merged" not in reads.keys() and "pe_1" in reads.keys() and "pe_2" in reads.keys():
+	if "merged" not in reads.keys() and "pe" in reads.keys():
 		if args.merge_with == "bbmerge":
 			reads = merge_bb(args, reads, readdir)
 		else:
 			reads = merge_seqprep(args, reads, readdir)
 
-	if "mp_1" in reads.keys():
+	#Processing Illumina mate-pairs
+	if "mp" in reads.keys():
 		reads = mp_read_processing(args, reads, readdir)
 
 	logger.info("Read processing finished")
@@ -308,11 +318,15 @@ def mash_estimate(args, reads):
 	MINIMUM_COPIES = 3
 
 	reads_to_sketch=[]
-	short_reads=['pe_1', 'pe_2', 'merged', 'single']
+	short_reads=['pe', 'merged', 'single']
 	for key in short_reads:
 		if key in reads.keys():
-			reads_to_sketch.append(reads[key])
-			readdirname=os.path.dirname(reads[key])
+			if len(reads[key]) > 1:
+				reads_to_sketch.append(list(reads[key]))
+				readdirname=os.path.dirname(reads[key][0])
+			else:
+				reads_to_sketch.append(reads[key])
+				readdirname=os.path.dirname(reads[key])
 	if len(reads_to_sketch) == 0:
 		logger.error("Not possible to estimate gemome size: short reads missing")
 		return None
@@ -344,7 +358,7 @@ def mp_read_processing(args, reads,readdir):
 	prefix = os.path.join(readdir, "nxtrim")
 	MINLENGTH = 31
 
-	cmd = ["nxtrim", "-1", reads['mp_1'], "-2", reads['mp_2'], "--separate"]
+	cmd = ["nxtrim", "-1", reads['mp'][0], "-2", reads['mp'][1], "--separate"]
 	cmd += ["--justmp", "-O", prefix, "-l", str(MINLENGTH)]
 	rc = run_external(args, cmd)
 	if args.use_unknown_mp:
@@ -358,11 +372,9 @@ def mp_read_processing(args, reads,readdir):
 				shutil.copyfileobj(src, dest)
 			with open(f"{prefix}_R2.unknown.fastq.gz", "rb") as src:
 				shutil.copyfileobj(src, dest)
-		reads['mp_1'] = f"{prefix}_R1.all.fastq.gz"
-		reads['mp_2'] = f"{prefix}_R2.all.fastq.gz"
+		reads['mp'] = (f"{prefix}_R1.all.fastq.gz", f"{prefix}_R2.all.fastq.gz")
 	else:
-		reads['mp_1'] = f"{prefix}_R1.mp.fastq.gz"
-		reads['mp_2'] = f"{prefix}_R2.mp.fastq.gz"
+		reads['mp'] = (f"{prefix}_R1.mp.fastq.gz", f"{prefix}_R2.mp.fastq.gz")
 
 	return reads
 
@@ -401,14 +413,14 @@ def assemble(args, reads):
 
 		if args.memory_limit:
 			cmd += ["-m", str(args.memory_limit)]
-		if 'pe_1' in reads.keys() and 'pe_2' in reads.keys():
-			cmd += ["-1", reads['pe_1'], "-2", reads['pe_2']]
+		if 'pe' in reads.keys():
+			cmd += ["-1", reads['pe'][0], "-2", reads['pe'][1]]
 		if 'merged' in reads.keys():
 			cmd += ["--merged", reads['merged']]
 		if 'single' in reads.keys():
 			cmd += ["-s", reads['single']]
-		if 'mp_1' in reads.keys() and 'mp_2' in reads.keys():
-			cmd += ["--mp1-1", reads['mp_1'], "--mp1-2", reads['mp_2']]
+		if 'mp' in reads.keys():
+			cmd += ["--mp1-1", reads['mp'][0], "--mp1-2", reads['mp'][1]]
 		if 'nanopore' in reads.keys():
 			cmd += ["--nanopore", reads['nanopore']]
 		if 'pacbio' in reads.keys():
@@ -442,8 +454,8 @@ def assemble(args, reads):
 
 		cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads),
 			"--mode", args.unicycler_mode]
-		if 'pe_1' in reads.keys() and 'pe_2' in reads.keys():
-			cmd += ["-1", reads['pe_1'], "-2", reads['pe_2']]
+		if 'pe' in reads.keys():
+			cmd += ["-1", reads['pe'][0], "-2", reads['pe'][1]]
 		if args.no_correction:
 			cmd += ["--no_correct"]
 		if 'merged' in reads.keys():
