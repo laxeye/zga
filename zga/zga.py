@@ -53,10 +53,12 @@ def parse_args():
 		help="Base quality cutoff for short reads, default: 25")
 	reads_args.add_argument("--adapters", 
 		help="FASTA file with adapter sequences for trimming from short reads. By default Illumina adapter sequences are used.")
-	reads_args.add_argument("--merge-with", default="bbmerge", choices=["bbmerge", "seqprep"],
-		help="Tool for merging overlapping paired-end reads: bbmerge (default) or seqprep")
+	'''
+	reads_args.add_argument("--merge-with", default="bbmerge", choices=["bbmerge"],
+		help="Tool for merging overlapping paired-end reads: bbmerge (default)")
+	'''
 	reads_args.add_argument("--filter-by-tile", action="store_true",
-		help="Filter reads based on positional quality over a flowcell.")
+		help="Filter Illumina reads based on positional quality over a flowcell.")
 	reads_args.add_argument("--genome-size-estimation", action="store_true",
 		help="Estimate genome size with mash")
 	#Mate pair read processing
@@ -198,26 +200,6 @@ def filter_by_tile(args, reads, readdir):
 	return reads
 
 
-def merge_seqprep(args, reads, readdir):
-	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
-	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
-	merged = os.path.join(readdir, "merged.fq.gz")
-	cmd = ["SeqPrep", "-f", reads['pe'][0], "-r", reads['pe'][1], "-1", notmerged_r1,
-		"-2", notmerged_r2, "-s", merged]
-	logger.info("Merging paired-end reads.")
-
-	rc = run_external(args, cmd)
-
-	if rc == 0:
-		for f in reads['pe']:
-			if os.path.dirname(f) == readdir and os.path.exists(f):
-				os.remove(f)
-		reads['merged'] = merged
-		reads['pe'] = (notmerged_r1, notmerged_r2)
-
-	return reads
-
-
 def merge_bb(args, reads, readdir):
 	# Worth to be args?
 	bb_trim = True
@@ -257,6 +239,9 @@ def trim_and_filter_pe(args, reads, readdir):
 			"-w", str(WINDOW), "-o", out_pe1, "-o", out_pe2, args.adapters, reads['pe'][0], reads['pe'][1]]
 		rc = run_external(args, cmd)
 		if rc == 0:
+			for f in reads['pe']:
+				if os.path.dirname(f) == readdir and os.path.exists(f):
+					os.remove(f)
 			reads['pe'] = (out_pe1, out_pe2)
 
 	if "single" in reads.keys():
@@ -299,10 +284,7 @@ def read_processing(args, reads):
 
 	# Merging overlapping paired-end reads
 	if "merged" not in reads.keys() and "pe" in reads.keys():
-		if args.merge_with == "bbmerge":
-			reads = merge_bb(args, reads, readdir)
-		else:
-			reads = merge_seqprep(args, reads, readdir)
+		reads = merge_bb(args, reads, readdir)
 
 	#Processing Illumina mate-pairs
 	if "mp" in reads.keys():
@@ -322,7 +304,7 @@ def mash_estimate(args, reads):
 	for key in short_reads:
 		if key in reads.keys():
 			if len(reads[key]) > 1:
-				reads_to_sketch.append(list(reads[key]))
+				reads_to_sketch += list(reads[key])
 				readdirname=os.path.dirname(reads[key][0])
 			else:
 				reads_to_sketch.append(reads[key])

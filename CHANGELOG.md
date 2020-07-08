@@ -1,5 +1,10 @@
 ZGA changelog
 
+**0.0.5**
+
++ Deleting provisional read files
+- SeqPrep dropped
+
 **0.0.4**
 
 + Genome size estimation with Mash

@@ -11,13 +11,13 @@ ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses sev
 
 * fastqc
 * ea-utils
-* bbmap (or seqprep)
-* spades
+* BBmap
+* SPAdes (>= 3.12 to support merged paired-end reads, >= 3.5.0 to support Nanopore reads)
 * unicycler
 * CheckM
 * DFast
 * BioPython
-* blastn
+* NCBI BLASTn
 * NxTrim
 * mash
 
@@ -25,7 +25,7 @@ All of them may be installed using **conda**:
 
 It's highly recommended to create a new conda environment:
 
-`conda create -n zga python=3.7 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython nxtrim mash`
+`conda create -n zga "python>=3.6" fastqc ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim mash`
 
 and activate it
 
@@ -34,7 +34,7 @@ and activate it
 
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install python>=3.6 fastqc ea-utils spades unicycler checkm-genome seqprep dfast bbmap blast biopython nxtrim mash`
+`conda install python>=3.6 fastqc ea-utils spades unicycler checkm-genome dfast bbmap blast biopython nxtrim mash`
 
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="zga",
-    version="0.0.5dev",
+    version="0.0.5",
     author="Aleksei Korzhenkov",
     author_email="oscypek@ya.ru",
     description="Prokaryotic genome assembly and annotation pipeline",
@@ -21,7 +21,7 @@ setuptools.setup(
     },
     package_data={"zga": ["data/*"]},
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Environment :: Console",
         "Intended Audience :: Science/Research",
         "Programming Language :: Python :: 3",
