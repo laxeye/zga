@@ -115,7 +115,7 @@ And of course tools it's using:
 
 Andrews, S. (2010). FastQC: a quality control tool for high throughput sequence data.
 
-Aronesty, E. (2015). ea-utils: Command-line tools for processing biological sequencing data. 2011. URL https://github. com/ExpressionAnalysis/ea-utils.
+Aronesty, E. (2013). Comparison of sequencing utility programs. The open bioinformatics journal, 7(1).
 
 Bushnell, B., Rood, J., & Singer, E. (2017). BBMerge–accurate paired shotgun read merging via overlap. PloS one, 12(10).
 
