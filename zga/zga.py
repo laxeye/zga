@@ -180,7 +180,7 @@ def read_QC(args, reads):
 	qcoutdir = create_subdir(args.output_dir, "QC")
 	reads_to_qc = []
 	for r in reads.values():
-		if len(r) > 1:
+		if isinstance(r, (list, tuple)):
 			reads_to_qc += list(r)
 		else:
 			reads_to_qc.append(r)
