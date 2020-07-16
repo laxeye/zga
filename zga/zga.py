@@ -48,7 +48,7 @@ def parse_args():
 	input_args.add_argument("--nanopore", help="Nanopore reads")
 
 	# Read processing
-	reads_args = parser.add_argument_group(title="Setting for processing of reads")
+	reads_args = parser.add_argument_group(title="Read processing settings")
 	reads_args.add_argument("-q", "--quality-cutoff", type=int, default=25,
 		help="Base quality cutoff for short reads, default: 25")
 	reads_args.add_argument("--adapters", 
@@ -300,20 +300,18 @@ def mash_estimate(args, reads):
 	MINIMUM_COPIES = 3
 
 	reads_to_sketch=[]
-	short_reads=['pe', 'merged', 'single']
-	for key in short_reads:
+	if 'pe' in reads.keys():
+		reads_to_sketch += list(reads['pe'])
+
+	for key in ['merged', 'single']:
 		if key in reads.keys():
-			if len(reads[key]) > 1:
-				reads_to_sketch += list(reads[key])
-				readdirname=os.path.dirname(reads[key][0])
-			else:
-				reads_to_sketch.append(reads[key])
-				readdirname=os.path.dirname(reads[key])
+			reads_to_sketch.append(reads[key])
+
 	if len(reads_to_sketch) == 0:
 		logger.error("Not possible to estimate gemome size: short reads missing")
 		return None
 
-	sketchprefix=os.path.join(readdirname, "sketch")	
+	sketchprefix=os.path.join(os.path.dirname(reads_to_sketch[0]), "sketch")
 	cmd = ["mash", "sketch", "-r", "-m", str(MINIMUM_COPIES), "-o", sketchprefix]
 	cmd += reads_to_sketch
 	r = run_external(args, cmd, False)
