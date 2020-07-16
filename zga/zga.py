@@ -60,15 +60,17 @@ def parse_args():
 	reads_args.add_argument("--filter-by-tile", action="store_true",
 		help="Filter Illumina reads based on positional quality over a flowcell.")
 	reads_args.add_argument("--genome-size-estimation", action="store_true",
-		help="Estimate genome size with mash")
+		help="Estimate genome size with mash.")
+	reads_args.add_argument("--estimated-genome-size",
+		help="Estimated genome for FLye assembler, if known.")
 	#Mate pair read processing
 	reads_args.add_argument("--use-unknown-mp", action="store_true",
 		help="Include reads that are probably mate pairs (default: only known MP used)")
 
 	# Assembly
 	asly_args = parser.add_argument_group(title="Assembly settings")
-	asly_args.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler"],
-		help="Assembler: unicycler (default; better quality, may use only long reads) or spades (faster, may use mate-pair reads).")
+	asly_args.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler", "flye"],
+		help="Assembler: unicycler (default; better quality), spades (faster, may use mate-pair reads) or Flye (long reads only).")
 	asly_args.add_argument("--no-correction", action="store_true", help="Disable read correction")
 	# Spades options
 	asly_args.add_argument("--use-scaffolds", action="store_true",
@@ -111,6 +113,20 @@ def parse_args():
 		bool(args.pe_merged) | bool(args.single_end) | bool(args.mp_1) ) :
 		logger.error("Impossible to run SPAdes without short reads!")
 		raise Exception("Bad parameters.")
+
+	if args.assembler == 'flye':
+
+		if args.nanopore and args.pacbio:
+			logger.error("Impossible to run Flye on mixed long reads!")
+			raise Exception("Bad parameters.")
+
+		if not ( bool(args.nanopore) | bool(args.pacbio) ) :
+			logger.error("Impossible to run Flye without long reads!")
+			raise Exception("Bad parameters.")
+
+		if not args.estimated_genome_size:
+			args.genome_size_estimation = True
+			logger.info("Genome size was not provided. It will be calculated with mash.")
 
 	return args
 
@@ -307,15 +323,15 @@ def mash_estimate(args, reads):
 	MINIMUM_COPIES = 3
 
 	reads_to_sketch=[]
-	if 'pe' in reads.keys():
-		reads_to_sketch += list(reads['pe'])
 
-	for key in ['merged', 'single']:
-		if key in reads.keys():
-			reads_to_sketch.append(reads[key])
+	for readfile in reads.values():
+		if isinstance( readfile, (list, tuple) ):
+			reads_to_sketch += list(readfile)
+		else:
+			reads_to_sketch.append(readfile)
 
 	if len(reads_to_sketch) == 0:
-		logger.error("Not possible to estimate gemome size: short reads missing")
+		logger.error("Not possible to estimate gemome size: reads missing")
 		return None
 
 	sketchprefix=os.path.join(os.path.dirname(reads_to_sketch[0]), "sketch")
@@ -335,10 +351,10 @@ def mash_estimate(args, reads):
 		estimations = [float(x.split()[-1]) for x in result if "Estimated" in x.split()]
 		best_estimation = sorted(zip(estimations[::2], estimations[1::2]), key=lambda x: -x[1])[0]
 		logger.info(f"Estimated genome size is {int(best_estimation[0])} at coverage {best_estimation[1]}.")
+		return int(best_estimation[0])
 	else:
 		logger.error("Genome size estimation with \"mash\" failed.")
-
-	return r.returncode
+		return None
 
 
 def mp_read_processing(args, reads,readdir):
@@ -366,9 +382,33 @@ def mp_read_processing(args, reads,readdir):
 	return reads
 
 
-def assemble(args, reads):
+def assemble(args, reads, estimated_genome_size):
 	logger.info("Assembling started")
 	aslydir = os.path.join(args.output_dir, "assembly")
+
+	if args.assembler == "flye":
+
+		cmd = ["flye", "-o", aslydir, "-g", str(estimated_genome_size), "-t", str(args.threads)]
+		if "nanopore" in reads.keys():
+			cmd += ["--nano-raw", reads['nanopore']]
+		elif "pacbio" in reads.keys():
+			cmd += ["--pacbio-raw", reads['pacbio']]
+
+		rc = run_external(args, cmd)
+
+		if rc != 0:
+			logger.error("Genome assembly finished with errors.")
+			logger.error("Plese check %s for more information." % os.path.join(aslydir, "flye.log"))
+			raise Exception("Extermal software error")
+		else:
+			logger.debug("Assembling finished")
+			assembly = os.path.join(aslydir, "assembly.fasta")
+			return assembly
+
+		'''
+		if args.flye_short_polish and ('pe' in reads.keys() or 'merged' in reads.keys() or 'single') :
+			pass
+		'''
 
 	if args.assembler == "spades":
 
@@ -378,18 +418,17 @@ def assemble(args, reads):
 		# Check Spades and get it's version to use verion-specific features
 		# as "--merged", "--isolate" etc.
 		try:
-			spades_version = str(subprocess.run(["spades.py", "-v"], stdout=subprocess.PIPE,
+			spades_stdout = str(subprocess.run(["spades.py", "-v"], stdout=subprocess.PIPE,
 				stderr=subprocess.PIPE, universal_newlines=True).stdout)
 		except Exception as e:
-			logger.error("Failed to run \"spades\"")
+			logger.error("Failed to run \"SPAdes\"")
 			raise e
-		#version = re.search(r'(?<=v)\d\S+', spades_help).group(0)
-		version = re.search(r'[\d\.]+', spades_version)[0]
-		logger.debug("Spades version %s detected" % version)
+		spades_version = re.search(r'[\d\.]+', spades_stdout)[0]
+		logger.debug(f"SPAdes version: {spades_version}")
 
 		'''
-		v_major = int(version.split(".")[0])
-		v_minor = int(version.split(".")[1])
+		v_major = int(spades_version.split(".")[0])
+		v_minor = int(spades_version.split(".")[1])
 
 		I'm not sure is it worth to use this mode...
 		if v_major > 3 or (v_major >= 3 and v_minor >= 14):
@@ -686,13 +725,15 @@ def main():
 	if args.first_step <= 2:
 		reads = read_processing(args, reads)
 		logger.debug("Processed reads: " + str(reads))
-		if args.genome_size_estimation:
-			mash_estimate(args, reads)
 		check_last_step(args, 2)
 
 	# Assembly
 	if args.first_step <= 3:
-		args.genome = assemble(args, reads)
+		if args.genome_size_estimation:
+			estimated_genome_size = mash_estimate(args, reads)
+		else:
+			estimated_genome_size = args.estimated_genome_size
+		args.genome = assemble(args, reads, estimated_genome_size)
 		check_last_step(args, 3)
 
 	# Assembly QC
