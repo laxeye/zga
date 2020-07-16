@@ -105,7 +105,14 @@ def parse_args():
 	anno_args.add_argument("--center-name", help="Genome center name.")
 	anno_args.add_argument("--minimum-length", help="Minimum sequence length in genome assembly.")
 
-	return parser.parse_args()
+	args = parser.parse_args()
+
+	if args.assembler == 'spades' and not ( bool(args.pe_1) |
+		bool(args.pe_merged) | bool(args.single_end) | bool(args.mp_1) ) :
+		logger.error("Impossible to run SPAdes without short reads!")
+		raise Exception("Bad parameters.")
+
+	return args
 
 
 def check_reads(args):
@@ -625,6 +632,15 @@ def check_last_step(args, step):
 
 
 def main():
+	global logger
+	logger = logging.getLogger("main")
+	logger.setLevel(logging.DEBUG)
+	formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+	ch = logging.StreamHandler()
+	ch.setLevel(logging.INFO)
+	ch.setFormatter(formatter)
+	logger.addHandler(ch)
+
 	args = parse_args()
 
 	args.output_dir = os.path.abspath(args.output_dir)
@@ -640,14 +656,6 @@ def main():
 		raise e("Imposible to create directory \"%s\"" % args.output_dir +
 			"Check provided path and permisions")
 
-	global logger
-	logger = logging.getLogger("main")
-	logger.setLevel(logging.DEBUG)
-	formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-	ch = logging.StreamHandler()
-	ch.setLevel(logging.INFO)
-	ch.setFormatter(formatter)
-	logger.addHandler(ch)
 	fh = logging.FileHandler(os.path.join(args.output_dir,"zga.log"))
 	fh.setLevel(logging.DEBUG)
 	fh.setFormatter(formatter)
