@@ -71,7 +71,8 @@ def parse_args():
 	asly_args = parser.add_argument_group(title="Assembly settings")
 	asly_args.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler", "flye"],
 		help="Assembler: unicycler (default; better quality), spades (faster, may use mate-pair reads) or Flye (long reads only).")
-	asly_args.add_argument("--no-correction", action="store_true", help="Disable read correction")
+	asly_args.add_argument("--no-correction", action="store_true",
+		help="Disable read correction in SPAdes")
 	# Spades options
 	asly_args.add_argument("--use-scaffolds", action="store_true",
 		help="SPAdes: Use assembled scaffolds.")
@@ -83,6 +84,10 @@ def parse_args():
 	asly_args.add_argument("--linear-seqs", default=0, help="Expected number of linear sequences")
 	asly_args.add_argument("--extract-replicons", action="store_true",
 		help="Unicycler: extract replicons (e.g. plasmids) from the assembly to separate files")
+	asly_args.add_argument("--flye-short-polish", action="store_true",
+		help="Perform polishing of FLye assembly with short reads using racon.")
+	asly_args.add_argument("--skip-flye-long-polish", action="store_true",
+		help="Skip stage of genome polishing with long reads.")
 
 	check_args = parser.add_argument_group(title="Genome check settings")
 	# phiX
@@ -320,7 +325,7 @@ def read_processing(args, reads):
 
 def mash_estimate(args, reads):
 	# Minimum copy number of k-mer to include it
-	MINIMUM_COPIES = 3
+	MINIMUM_COPIES = 5
 
 	reads_to_sketch=[]
 
@@ -382,6 +387,50 @@ def mp_read_processing(args, reads,readdir):
 	return reads
 
 
+def map_short_reads(args, assembly, reads, target):
+	cmd = ["minimap2", "-x", "sr", "-t", str(args.threads), "-a", "-o", target, assembly, reads]
+
+	logger.info("Mapping reads.")
+	rc = run_external(args, cmd, return_code=True)
+	if rc == 0:
+		return target
+	else:
+		logger.error("Unsuccesful mapping.")
+		return None
+
+
+def racon_polish(args, assembly, reads):
+	polish_dir = os.path.join(args.output_dir, "polishing")
+	if not os.path.isdir(polish_dir):
+		polish_dir = create_subdir(args.output_dir, "polishing")
+	target = os.path.join(polish_dir, "mapping.sam")
+	for r in reads:
+		if isinstance(r, (list, tuple)):
+			assembly = racon_polish(args, assembly, r)
+		mapping = map_short_reads(args, assembly, reads, target)
+		if mapping:
+			cmd = ['racon', '-t', str(args.threads), r, mapping, assembly]
+			r = run_external(args, cmd, return_code=False)
+			if r.returncode == 0:
+				with open(assembly, 'r') as assembly_handle:
+					digest = hashlib.md5(assembly_handle.read()).hexdigest()
+				suffix = "".join([chr(65 + (int(digest[x],16) + int(digest[x+1],16)) % 26) for x in range(0,20,2)])
+				fname = f"polished.{suffix}.fna"
+				fname = os.path.join(polish_dir, fname)
+				try:
+					handle = open(fname, 'w')
+					handle.write(r.stdout)
+					handle.close()
+					assembly = fname
+				except Exception as e:
+					logger.error("Error during polishing.")
+					raise e
+		else:
+			logger.error("Impossible to perform polishing.")
+
+	return assembly
+
+
 def assemble(args, reads, estimated_genome_size):
 	logger.info("Assembling started")
 	aslydir = os.path.join(args.output_dir, "assembly")
@@ -394,6 +443,9 @@ def assemble(args, reads, estimated_genome_size):
 		elif "pacbio" in reads.keys():
 			cmd += ["--pacbio-raw", reads['pacbio']]
 
+		if args.skip_flye_long_polish:
+			cmd += ["--stop-after", "contigger"]
+
 		rc = run_external(args, cmd)
 
 		if rc != 0:
@@ -403,12 +455,16 @@ def assemble(args, reads, estimated_genome_size):
 		else:
 			logger.debug("Assembling finished")
 			assembly = os.path.join(aslydir, "assembly.fasta")
-			return assembly
 
-		'''
-		if args.flye_short_polish and ('pe' in reads.keys() or 'merged' in reads.keys() or 'single') :
-			pass
-		'''
+			if args.flye_short_polish:
+				short_reads_keys = {'pe', 'merged', 'single'}
+				short_reads = [ reads[k] for k in list(set(reads.keys()) & short_reads_keys) ]
+				if len(short_reads) > 0:
+					assembly = racon_polish(args, assembly, short_reads)
+				else:
+					logger.error("Short reads are not provided for polishing of flye assembly.")
+
+			return assembly
 
 	if args.assembler == "spades":
 
