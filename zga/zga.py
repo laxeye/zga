@@ -23,7 +23,7 @@ def parse_args():
 	# parser.add_argument("--tmp-dir", default="zga-temp", help="Temporary directory")
 	general_args.add_argument("-t", "--threads", type=int, default=1,
 		help="Number of CPU threads to use (where possible)")
-	general_args.add_argument("-m", "--memory-limit", type=int, help="Memory limit in GB for SPAdes")
+	general_args.add_argument("-m", "--memory-limit", type=int, help="Memory limit in GB")
 	general_args.add_argument("--genus", default="Unknown", help="Provide genus if known")
 	general_args.add_argument("--species", default="sp.", help="Provide species if known")
 	general_args.add_argument("--strain", help="Provide strain if known")
@@ -53,12 +53,10 @@ def parse_args():
 		help="Base quality cutoff for short reads, default: 25")
 	reads_args.add_argument("--adapters", 
 		help="FASTA file with adapter sequences for trimming from short reads. By default Illumina adapter sequences are used.")
-	'''
-	reads_args.add_argument("--merge-with", default="bbmerge", choices=["bbmerge"],
-		help="Tool for merging overlapping paired-end reads: bbmerge (default)")
-	'''
 	reads_args.add_argument("--filter-by-tile", action="store_true",
 		help="Filter Illumina reads based on positional quality over a flowcell.")
+	reads_args.add_argument("--bbmerge-extend", action="store_true",
+		help="Perform read extension based on k-mers if merging wasn't succesfull.")
 	reads_args.add_argument("--genome-size-estimation", action="store_true",
 		help="Estimate genome size with mash")
 	#Mate pair read processing
@@ -211,12 +209,17 @@ def merge_bb(args, reads, readdir):
 	# Worth to be args?
 	bb_trim = True
 	bb_trimq = "10"  # should be str
+	bb_kmer = "40"  # should be str
+	bb_extend = "40"  # should be str
 
 	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
 	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
 	merged = os.path.join(readdir, "merged.fq.gz")
-	cmd = ["bbmerge.sh", f"in1={reads['pe'][0]}", f"in2={reads['pe'][1]}",
+	cmd = ["bbmerge.sh", f"Xmx={str(args.memory_limit)}G",
+		f"in1={reads['pe'][0]}", f"in2={reads['pe'][1]}",
 		f"outu1={notmerged_r1}", f"outu2={notmerged_r2}", f"out={merged}"]
+	if args.bbmerge_extend:
+		cmd += [f"extend2={bb_extend}", f"k={bb_kmer}", "rsem=t"]
 	if bb_trim:
 		cmd += ["qtrim2=t", f"trimq={bb_trimq}"]
 	logger.info("Merging paired-end reads.")
