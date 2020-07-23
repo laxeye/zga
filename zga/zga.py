@@ -51,7 +51,7 @@ def parse_args():
 	reads_args = parser.add_argument_group(title="Read processing settings")
 	reads_args.add_argument("-q", "--quality-cutoff", type=int, default=25,
 		help="Base quality cutoff for short reads, default: 25")
-	reads_args.add_argument("--adapters", 
+	reads_args.add_argument("--adapters",
 		help="FASTA file with adapter sequences for trimming from short reads. By default Illumina adapter sequences are used.")
 	reads_args.add_argument("--filter-by-tile", action="store_true",
 		help="Filter Illumina reads based on positional quality over a flowcell.")
@@ -61,7 +61,7 @@ def parse_args():
 		help="Estimate genome size with mash.")
 	reads_args.add_argument("--estimated-genome-size",
 		help="Estimated genome for FLye assembler, if known.")
-	#Mate pair read processing
+	# Mate pair read processing
 	reads_args.add_argument("--use-unknown-mp", action="store_true",
 		help="Include reads that are probably mate pairs (default: only known MP used)")
 
@@ -125,7 +125,7 @@ def parse_args():
 			logger.error("Impossible to run Flye on mixed long reads!")
 			raise Exception("Bad parameters.")
 
-		if not ( bool(args.nanopore) | bool(args.pacbio) ) :
+		if not ( bool(args.nanopore) | bool(args.pacbio) ):
 			logger.error("Impossible to run Flye without long reads!")
 			raise Exception("Bad parameters.")
 
@@ -180,7 +180,8 @@ def create_subdir(parent, child):
 	try:
 		os.mkdir(path)
 	except Exception as e:
-		raise e(f"Impossible to create directory: {path}")
+		logger.critical(f"Impossible to create directory: {path}")
+		raise e
 	return path
 
 
@@ -322,7 +323,7 @@ def read_processing(args, reads):
 	if "merged" not in reads.keys() and "pe" in reads.keys():
 		reads = merge_bb(args, reads, readdir)
 
-	#Processing Illumina mate-pairs
+	# Processing Illumina mate-pairs
 	if "mp" in reads.keys():
 		reads = mp_read_processing(args, reads, readdir)
 
@@ -335,7 +336,7 @@ def mash_estimate(args, reads):
 	# Minimum copy number of k-mer to include it
 	MINIMUM_COPIES = 5
 
-	reads_to_sketch=[]
+	reads_to_sketch = []
 
 	for readfile in reads.values():
 		if isinstance( readfile, (list, tuple) ):
@@ -347,7 +348,7 @@ def mash_estimate(args, reads):
 		logger.error("Not possible to estimate gemome size: reads missing")
 		return None
 
-	sketchprefix=os.path.join(os.path.dirname(reads_to_sketch[0]), "sketch")
+	sketchprefix = os.path.join(os.path.dirname(reads_to_sketch[0]), "sketch")
 	cmd = ["mash", "sketch", "-r", "-m", str(MINIMUM_COPIES), "-o", sketchprefix]
 	cmd += reads_to_sketch
 	logger.info(f"Estimating genome size with mash using: {', '.join(reads_to_sketch)}.")
@@ -371,7 +372,7 @@ def mash_estimate(args, reads):
 		return None
 
 
-def mp_read_processing(args, reads,readdir):
+def mp_read_processing(args, reads, readdir):
 	prefix = os.path.join(readdir, "nxtrim")
 	MINLENGTH = 31
 
@@ -426,7 +427,7 @@ def racon_polish(args, assembly, reads):
 					os.remove(mapping)
 				if r.returncode == 0:
 					digest = hashlib.md5(r.stdout.encode('utf-8')).hexdigest()
-					suffix = "".join([chr(65 + (int(digest[x],16) + int(digest[x+1],16)) % 26) for x in range(0,20,2)])
+					suffix = "".join([chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 20, 2)])
 					fname = os.path.join(polish_dir, f"polished.{suffix}.fna")
 					try:
 						handle = open(fname, 'w')
@@ -534,7 +535,7 @@ def assemble(args, reads, estimated_genome_size):
 	elif args.assembler == "unicycler":
 		# Only to check if able to run unicycler now
 		try:
-			version_stdout = subprocess.run(["unicycler", "--version"],
+			version_stdout = subprocess.run(["unicycler", "--version"], encoding="utf-8",
 				stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
 			version = re.search(r'v(\d\S*)', version_stdout)[1]
 			logger.debug(f"Unicycler version {version} available.")
@@ -579,30 +580,30 @@ def extract_replicons(args, aslydir):
 	logfile = os.path.join(aslydir, "unicycler.log")
 	assemblyfile = os.path.join(aslydir, "assembly.fasta")
 	with open(logfile, "r") as log:
-	    regexp = re.compile(r'\s?\d+.+\scomplete')
-	    repl_lengths = []
-	    for l in log.readlines():
-	        if regexp.search(l):
-	            component, segments, links, length, _, _, status = l.split()
-	            if int(segments) == 1:
-	                repl_lengths.append(int(length.replace(",","")))
-	    logger.debug("Extracting " + str(len(repl_lengths)) + " replicon(s).")
-	    with open(assemblyfile, "r") as assembly:
-	        replicons = [x for x in SeqIO.parse(assembly, "fasta") if len(x) in repl_lengths]
-	        for x in range(len(replicons)):
-	            try:
-	                F = open(os.path.join(aslydir,f"replicon.{x+1}.fasta"),"w")
-	                SeqIO.write(replicons[x], F, "fasta")
-	                F.close()
-	            except Exception as e:
-	                raise e
+		regexp = re.compile(r'\s?\d+.+\scomplete')
+		repl_lengths = []
+		for line in log.readlines():
+			if regexp.search(line):
+				component, segments, links, length, _, _, status = line.split()
+				if int(segments) == 1:
+					repl_lengths.append(int(length.replace(",", "")))
+		logger.debug(f"Extracting {str(len(repl_lengths))} replicon(s).")
+		with open(assemblyfile, "r") as assembly:
+			replicons = [x for x in SeqIO.parse(assembly, "fasta") if len(x) in repl_lengths]
+			for x in range(len(replicons)):
+				try:
+					F = open(os.path.join(aslydir, f"replicon.{x+1}.fasta"), "w")
+					SeqIO.write(replicons[x], F, "fasta")
+					F.close()
+				except Exception as e:
+					raise e
 
 
 def locus_tag_gen(genome):
 	logger.info("No locus tag provided. Generating it as MD5 hash of genome")
 	with open(genome, 'rb') as genomefile:
 		digest = hashlib.md5(genomefile.read()).hexdigest()
-		locus_tag = "".join([chr(65 + (int(digest[x],16) + int(digest[x+1],16)) % 26) for x in range(0,12,2)])
+		locus_tag = "".join([chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 12, 2)])
 		logger.info("Locus tag generated: %s" % locus_tag)
 		return locus_tag
 
@@ -611,7 +612,8 @@ def annotate(args):
 	logger.info("Genome annotation started")
 
 	try:
-		version_stdout = subprocess.run(["dfast", "--version"], stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
+		version_stdout = subprocess.run(["dfast", "--version"], encoding="utf-8",
+			stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
 		version = re.search(r'ver. (\d\S*)', version_stdout)[1]
 		logger.debug(f"DFAST version {version} available.")
 	except Exception as e:
@@ -643,7 +645,7 @@ def annotate(args):
 
 def check_phix(args):
 	logger.info("Checking assembly for presence of Illumina phiX control")
-	phix_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),"data/phiX174.fasta")
+	phix_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/phiX174.fasta")
 	blast_format = "6 sseqid pident slen length"
 	cmd = ["blastn", "-query", phix_path, "-subject", args.genome, "-outfmt", blast_format, "-evalue", "1e-6"]
 
@@ -655,9 +657,9 @@ def check_phix(args):
 
 	phix_contigs = []
 	if bool(blast_out):
-		for l in blast_out.split('\n'):
-			i, p, s, l = l.split("\t")
-			if float(p) > 95.0 and int(s)/int(l) > 0.5:
+		for line in blast_out.split('\n'):
+			i, p, s, l = line.split("\t")
+			if float(p) > 95.0 and int(s) / int(l) > 0.5:
 				phix_contigs.append(i)
 		phix_contigs = list(set(phix_contigs))
 
@@ -696,8 +698,8 @@ def run_checkm(args):
 
 		if args.checkm_taxon and args.checkm_rank:
 			found = False
-			for l in checkm_taxon_list.split("\n"):
-				if args.checkm_taxon in l and args.checkm_rank in l:
+			for line in checkm_taxon_list.split("\n"):
+				if args.checkm_taxon in line and args.checkm_rank in line:
 					found = True
 					break
 			if not found:
@@ -754,22 +756,24 @@ def main():
 		if args.force:
 			shutil.rmtree(args.output_dir)
 		else:
-			raise FileExistsError("\nOutput directory \"%s\" already exists.\n" % args.output_dir +
+			logger.critical(f"Output directory \"{args.output_dir}\" already exists.\n" +
 				"Use --force to overwrite or provide another path")
+			raise FileExistsError(args.output_dir)
 	try:
 		os.mkdir(args.output_dir)
 	except Exception as e:
-		raise e("Imposible to create directory \"%s\"" % args.output_dir +
-			"Check provided path and permisions")
+		logger.critical(f"Imposible to create directory{args.output_dir}!")
+		raise e
 
-	fh = logging.FileHandler(os.path.join(args.output_dir,"zga.log"))
+	fh = logging.FileHandler(os.path.join(args.output_dir, "zga.log"))
 	fh.setLevel(logging.DEBUG)
 	fh.setFormatter(formatter)
 	logger.addHandler(fh)
 
 	logger.info("Pipeline started")
 
-	steps = {"qc":1, "processing":2, "assembling":3, "polishing":4, "annotation":6, "check_genome":5}
+	steps = {"qc": 1, "processing": 2, "assembling": 3, "polishing": 4,
+		"annotation": 6, "check_genome": 5}
 	args.first_step = steps[args.first_step]
 	args.last_step = steps[args.last_step]
 	if args.first_step <= 4:
@@ -824,7 +828,7 @@ def main():
 		checkm_outfile = run_checkm(args)
 		if checkm_outfile:
 			with open(checkm_outfile) as result:
-				completeness, contamination, heterogeneity =  list(map(float, result.readlines()[3].split()[-3::1]))
+				completeness, contamination, heterogeneity = list(map(float, result.readlines()[3].split()[-3::1]))
 				if completeness < 80.0 or (completeness - 5.0 * contamination < 50.0):
 					logger.info("The genome assembly has low quality!")
 				logger.info(f"Genome completeness: {completeness}%")
