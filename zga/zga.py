@@ -15,9 +15,9 @@ def parse_args():
 	# General options
 	general_args = parser.add_argument_group(title="General options", description="")
 	general_args.add_argument("-s", "--first-step", help="First step of the pipeline", default="qc",
-		choices=["qc", "processing", "assembling", "check_genome", "annotation"])
+		choices=["qc", "processing", "assembling", "polishing", "check_genome", "annotation"])
 	general_args.add_argument("-l", "--last-step", help="Last step of the pipeline", default="annotation",
-		choices=["qc", "processing", "assembling", "check_genome", "annotation"])
+		choices=["qc", "processing", "assembling", "polishing", "check_genome", "annotation"])
 	general_args.add_argument("-o", "--output-dir", required=True, help="Output directory")
 	general_args.add_argument("--force", action="store_true", help="Overwrite output directory if exists")
 	# parser.add_argument("--tmp-dir", default="zga-temp", help="Temporary directory")
@@ -69,7 +69,8 @@ def parse_args():
 	asly_args = parser.add_argument_group(title="Assembly settings")
 	asly_args.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler", "flye"],
 		help="Assembler: unicycler (default; better quality), spades (faster, may use mate-pair reads) or Flye (long reads only).")
-	asly_args.add_argument("--no-correction", action="store_true", help="Disable read correction")
+	asly_args.add_argument("--no-correction", action="store_true",
+		help="Disable read correction in SPAdes")
 	# Spades options
 	asly_args.add_argument("--use-scaffolds", action="store_true",
 		help="SPAdes: Use assembled scaffolds.")
@@ -81,6 +82,12 @@ def parse_args():
 	asly_args.add_argument("--linear-seqs", default=0, help="Expected number of linear sequences")
 	asly_args.add_argument("--extract-replicons", action="store_true",
 		help="Unicycler: extract replicons (e.g. plasmids) from the assembly to separate files")
+	asly_args.add_argument("--flye-short-polish", action="store_true",
+		help="Perform polishing of FLye assembly with short reads using racon.")
+	asly_args.add_argument("--skip-flye-long-polish", action="store_true",
+		help="Skip stage of genome polishing with long reads.")
+	asly_args.add_argument("--perform-polishing", action="store_true",
+		help="Perform polishing. Useful only for flye assembly of long reads and short reads available.")
 
 	check_args = parser.add_argument_group(title="Genome check settings")
 	# phiX
@@ -125,6 +132,9 @@ def parse_args():
 		if not args.estimated_genome_size:
 			args.genome_size_estimation = True
 			logger.info("Genome size was not provided. It will be calculated with mash.")
+
+	if args.flye_short_polish:
+		args.perform_polishing = True
 
 	return args
 
@@ -323,7 +333,7 @@ def read_processing(args, reads):
 
 def mash_estimate(args, reads):
 	# Minimum copy number of k-mer to include it
-	MINIMUM_COPIES = 3
+	MINIMUM_COPIES = 5
 
 	reads_to_sketch=[]
 
@@ -385,6 +395,52 @@ def mp_read_processing(args, reads,readdir):
 	return reads
 
 
+def map_short_reads(args, assembly, reads, target):
+	cmd = ["minimap2", "-x", "sr", "-t", str(args.threads), "-a", "-o", target, assembly, reads]
+
+	logger.info(f"Mapping reads: {reads}.")
+	rc = run_external(args, cmd, return_code=True)
+	if rc == 0:
+		return target
+	else:
+		logger.error("Unsuccesful mapping.")
+		return None
+
+
+def racon_polish(args, assembly, reads):
+	polish_dir = os.path.join(args.output_dir, "polishing")
+	if not os.path.isdir(polish_dir):
+		polish_dir = create_subdir(args.output_dir, "polishing")
+	target = os.path.join(polish_dir, "mapping.sam")
+	for r in reads:
+		if isinstance(r, (list, tuple)):
+			assembly = racon_polish(args, assembly, r)
+		else:
+			logger.debug(f"Racon genome polishing with: {r}")
+			mapping = map_short_reads(args, assembly, r, target)
+			if mapping:
+				cmd = ['racon', '-t', str(args.threads), r, mapping, assembly]
+				r = run_external(args, cmd, return_code=False)
+				if os.path.exists(mapping):
+					os.remove(mapping)
+				if r.returncode == 0:
+					digest = hashlib.md5(r.stdout.encode('utf-8')).hexdigest()
+					suffix = "".join([chr(65 + (int(digest[x],16) + int(digest[x+1],16)) % 26) for x in range(0,20,2)])
+					fname = os.path.join(polish_dir, f"polished.{suffix}.fna")
+					try:
+						handle = open(fname, 'w')
+						handle.write(r.stdout)
+						handle.close()
+						assembly = fname
+					except Exception as e:
+						logger.error(f"Error during polishing: impossible to write file {fname}")
+						raise e
+			else:
+				logger.error("Impossible to perform polishing.")
+
+	return assembly
+
+
 def assemble(args, reads, estimated_genome_size):
 	logger.info("Assembling started")
 	aslydir = os.path.join(args.output_dir, "assembly")
@@ -397,21 +453,23 @@ def assemble(args, reads, estimated_genome_size):
 		elif "pacbio" in reads.keys():
 			cmd += ["--pacbio-raw", reads['pacbio']]
 
+		if args.skip_flye_long_polish:
+			cmd += ["--stop-after", "contigger"]
+
 		rc = run_external(args, cmd)
 
 		if rc != 0:
 			logger.error("Genome assembly finished with errors.")
 			logger.error("Plese check %s for more information." % os.path.join(aslydir, "flye.log"))
 			raise Exception("Extermal software error")
+			return None
 		else:
 			logger.debug("Assembling finished")
-			assembly = os.path.join(aslydir, "assembly.fasta")
+			if args.skip_flye_long_polish:
+				assembly = os.path.join(aslydir, "30-contigger/contigs.fasta")
+			else:
+				assembly = os.path.join(aslydir, "assembly.fasta")
 			return assembly
-
-		'''
-		if args.flye_short_polish and ('pe' in reads.keys() or 'merged' in reads.keys() or 'single') :
-			pass
-		'''
 
 	if args.assembler == "spades":
 
@@ -705,10 +763,10 @@ def main():
 
 	logger.info("Pipeline started")
 
-	steps = {"qc":1, "processing":2, "assembling":3, "annotation":5, "check_genome":4}
+	steps = {"qc":1, "processing":2, "assembling":3, "polishing":4, "annotation":6, "check_genome":5}
 	args.first_step = steps[args.first_step]
 	args.last_step = steps[args.last_step]
-	if args.first_step <= 3:
+	if args.first_step <= 4:
 		reads = check_reads(args)
 		logger.debug("Reads: " + str(reads))
 		if len(list(reads)) == 0:
@@ -739,8 +797,21 @@ def main():
 		args.genome = assemble(args, reads, estimated_genome_size)
 		check_last_step(args, 3)
 
+	# Short read polishing is only meaningful for flye assembly
+	if args.first_step <= 4 and args.perform_polishing and args.assembler == 'flye':
+		short_reads_keys = {'pe', 'merged', 'single'}
+		short_reads_list = [ reads[k] for k in list(set(reads.keys()) & short_reads_keys) ]
+		if len(short_reads_list) > 0:
+			logger.info("Performing genome polishing.")
+			args.genome = racon_polish(args, args.genome, short_reads_list)
+			args.genome = shutil.copy2(args.genome, os.path.join(args.output_dir, "assembly.polished.fasta"))
+			logger.info(f"Genome polishing finished. Polished genome strored at: {args.genome}")
+		else:
+			logger.error("Short reads are not provided for polishing of flye assembly.")
+		check_last_step(args, 4)
+
 	# Assembly QC
-	if args.first_step <= 4:
+	if args.first_step <= 5:
 		logger.info("Checking genome quality")
 		if args.check_phix:
 			args.genome = check_phix(args)
@@ -748,20 +819,20 @@ def main():
 		if checkm_outfile:
 			with open(checkm_outfile) as result:
 				completeness, contamination, heterogeneity =  list(map(float, result.readlines()[3].split()[-3::1]))
-				if float(completeness) < 80.0 or (float(completeness) - 5.0 * float(contamination) < 50.0):
+				if completeness < 80.0 or (completeness - 5.0 * contamination < 50.0):
 					logger.info("The genome assembly has low quality!")
 				logger.info(f"Genome completeness: {completeness}%")
 				logger.info(f"Genome contamination: {contamination}%")
 				logger.info(f"Genome heterogeneity: {heterogeneity}%")
-		check_last_step(args, 4)
+		check_last_step(args, 5)
 
 	# Annotation
-	if args.first_step <= 5:
+	if args.first_step <= 6:
 		if not args.genome or not os.path.isfile(args.genome):
 			logger.error("Genome assembly is not provided")
 			raise FileNotFoundError()
 		args.genome = annotate(args)
-		check_last_step(args, 5)
+		check_last_step(args, 6)
 
 
 if __name__ == "__main__":

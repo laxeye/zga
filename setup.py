@@ -1,11 +1,12 @@
 import setuptools
+import zga
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="zga",
-    version="0.0.6dev",
+    version=zga.__version__,
     author="Aleksei Korzhenkov",
     author_email="oscypek@ya.ru",
     description="Prokaryotic genome assembly and annotation pipeline",
