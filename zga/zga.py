@@ -234,9 +234,9 @@ def filter_by_tile(args, reads, readdir):
 def merge_bb(args, reads, readdir):
 	# Worth to be args?
 	bb_trim = True
-	bb_trimq = "10"  # should be str
-	bb_kmer = "40"  # should be str
-	bb_extend = "40"  # should be str
+	bb_trimq = 10
+	bb_kmer = 40
+	bb_extend = 40
 
 	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
 	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
@@ -350,6 +350,7 @@ def mash_estimate(args, reads):
 	sketchprefix=os.path.join(os.path.dirname(reads_to_sketch[0]), "sketch")
 	cmd = ["mash", "sketch", "-r", "-m", str(MINIMUM_COPIES), "-o", sketchprefix]
 	cmd += reads_to_sketch
+	logger.info(f"Estimating genome size with mash using: {', '.join(reads_to_sketch)}.")
 	r = run_external(args, cmd, False)
 
 	'''
@@ -376,21 +377,21 @@ def mp_read_processing(args, reads,readdir):
 
 	cmd = ["nxtrim", "-1", reads['mp'][0], "-2", reads['mp'][1], "--separate"]
 	cmd += ["--justmp", "-O", prefix, "-l", str(MINLENGTH)]
-	rc = run_external(args, cmd)
-	if args.use_unknown_mp:
-		with open(f"{prefix}_R1.all.fastq.gz", "wb") as dest:
-			with open(f"{prefix}_R1.mp.fastq.gz", "rb") as src:
-				shutil.copyfileobj(src, dest)
-			with open(f"{prefix}_R1.unknown.fastq.gz", "rb") as src:
-				shutil.copyfileobj(src, dest)
-		with open(f"{prefix}_R2.all.fastq.gz", "wb") as dest:
-			with open(f"{prefix}_R2.mp.fastq.gz", "rb") as src:
-				shutil.copyfileobj(src, dest)
-			with open(f"{prefix}_R2.unknown.fastq.gz", "rb") as src:
-				shutil.copyfileobj(src, dest)
-		reads['mp'] = (f"{prefix}_R1.all.fastq.gz", f"{prefix}_R2.all.fastq.gz")
-	else:
-		reads['mp'] = (f"{prefix}_R1.mp.fastq.gz", f"{prefix}_R2.mp.fastq.gz")
+	if run_external(args, cmd) == 0:
+		if args.use_unknown_mp:
+			with open(f"{prefix}_R1.all.fastq.gz", "wb") as dest:
+				with open(f"{prefix}_R1.mp.fastq.gz", "rb") as src:
+					shutil.copyfileobj(src, dest)
+				with open(f"{prefix}_R1.unknown.fastq.gz", "rb") as src:
+					shutil.copyfileobj(src, dest)
+			with open(f"{prefix}_R2.all.fastq.gz", "wb") as dest:
+				with open(f"{prefix}_R2.mp.fastq.gz", "rb") as src:
+					shutil.copyfileobj(src, dest)
+				with open(f"{prefix}_R2.unknown.fastq.gz", "rb") as src:
+					shutil.copyfileobj(src, dest)
+			reads['mp'] = (f"{prefix}_R1.all.fastq.gz", f"{prefix}_R2.all.fastq.gz")
+		else:
+			reads['mp'] = (f"{prefix}_R1.mp.fastq.gz", f"{prefix}_R2.mp.fastq.gz")
 
 	return reads
 
@@ -481,11 +482,11 @@ def assemble(args, reads, estimated_genome_size):
 		try:
 			spades_stdout = str(subprocess.run(["spades.py", "-v"], stdout=subprocess.PIPE,
 				stderr=subprocess.PIPE, universal_newlines=True).stdout)
+			spades_version = re.search(r'[\d\.]+', spades_stdout)[0]
+			logger.debug(f"SPAdes version: {spades_version}")
 		except Exception as e:
-			logger.error("Failed to run \"SPAdes\"")
+			logger.critical("Failed to run SPAdes!")
 			raise e
-		spades_version = re.search(r'[\d\.]+', spades_stdout)[0]
-		logger.debug(f"SPAdes version: {spades_version}")
 
 		'''
 		v_major = int(spades_version.split(".")[0])
@@ -533,10 +534,12 @@ def assemble(args, reads, estimated_genome_size):
 	elif args.assembler == "unicycler":
 		# Only to check if able to run unicycler now
 		try:
-			version = subprocess.run(["unicycler", "--version"],
-			stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
+			version_stdout = subprocess.run(["unicycler", "--version"],
+				stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
+			version = re.search(r'v(\d\S*)', version_stdout)[1]
+			logger.debug(f"Unicycler version {version} available.")
 		except Exception as e:
-			logger.critical("Failed to run \'Unicycler\'.")
+			logger.critical("Failed to run Unicycler!")
 			raise e
 
 		cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads),
@@ -608,9 +611,11 @@ def annotate(args):
 	logger.info("Genome annotation started")
 
 	try:
-		version = subprocess.run(["dfast", "--version"], stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
+		version_stdout = subprocess.run(["dfast", "--version"], stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
+		version = re.search(r'ver. (\d\S*)', version_stdout)[1]
+		logger.debug(f"DFAST version {version} available.")
 	except Exception as e:
-		logger.critical("Failed to run DFAST")
+		logger.critical("Failed to run DFAST!")
 		raise e
 
 	annodir = os.path.join(args.output_dir, "annotation")
@@ -631,8 +636,9 @@ def annotate(args):
 		cmd += ["--minimum_length", args.minimum_length]
 
 	rc = run_external(args, cmd)
-
-	return os.path.join(annodir, "genome.fna")
+	if rc == 0:
+		args.genome = os.path.join(annodir, "genome.fna")
+	return args.genome
 
 
 def check_phix(args):
@@ -779,7 +785,7 @@ def main():
 
 	# QC
 	if args.first_step == 1:
-		return_code = read_QC(args, reads)
+		read_QC(args, reads)
 		check_last_step(args, 1)
 
 	# Processing
