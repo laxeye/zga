@@ -1,5 +1,10 @@
 ZGA changelog
 
+**0.0.6**
+
++ Flye assembler implemented
++ Polishing with short reads using racon
+
 **0.0.5**
 
 + Deleting provisional read files
