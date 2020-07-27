@@ -200,11 +200,11 @@ def run_external(args, cmd, return_code=True):
 		return r
 
 
-def read_QC(args, reads):
+def short_read_QC(args, short_reads):
 	logger.info("Read quality control started")
 	qcoutdir = create_subdir(args.output_dir, "QC")
 	reads_to_qc = []
-	for r in reads.values():
+	for r in short_reads:
 		if isinstance(r, (list, tuple)):
 			reads_to_qc += list(r)
 		else:
@@ -449,6 +449,9 @@ def assemble(args, reads, estimated_genome_size):
 
 	if args.assembler == "flye":
 
+		if bool(estimated_genome_size) == False:
+			logger.critical("Impossible to run flye without genome size estimation!")
+			sys.exit(1)
 		cmd = ["flye", "-o", aslydir, "-g", str(estimated_genome_size), "-t", str(args.threads)]
 		if "nanopore" in reads.keys():
 			cmd += ["--nano-raw", reads['nanopore']]
@@ -780,8 +783,10 @@ def main():
 		reads = check_reads(args)
 		logger.debug("Reads: " + str(reads))
 		if len(list(reads)) == 0:
-			logger.error("No reads provided for genome assembly")
+			logger.critical("No reads provided for genome assembly")
 			raise Exception("No reads provided for genome assembly")
+		short_reads_keys = {'pe', 'merged', 'single'}
+		short_reads_list = [ reads[k] for k in list(set(reads.keys()) & short_reads_keys) ]
 
 	if args.first_step > 3 and (not args.genome or not os.path.isfile(args.genome)):
 		logger.error("Genome assembly is not provided")
@@ -789,7 +794,7 @@ def main():
 
 	# QC
 	if args.first_step == 1:
-		read_QC(args, reads)
+		short_read_QC(args, short_reads_list)
 		check_last_step(args, 1)
 
 	# Processing
@@ -809,8 +814,6 @@ def main():
 
 	# Short read polishing is only meaningful for flye assembly
 	if args.first_step <= 4 and args.perform_polishing and args.assembler == 'flye':
-		short_reads_keys = {'pe', 'merged', 'single'}
-		short_reads_list = [ reads[k] for k in list(set(reads.keys()) & short_reads_keys) ]
 		if len(short_reads_list) > 0:
 			logger.info("Performing genome polishing.")
 			args.genome = racon_polish(args, args.genome, short_reads_list)
