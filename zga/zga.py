@@ -23,7 +23,7 @@ def parse_args():
 	# parser.add_argument("--tmp-dir", default="zga-temp", help="Temporary directory")
 	general_args.add_argument("-t", "--threads", type=int, default=1,
 		help="Number of CPU threads to use (where possible)")
-	general_args.add_argument("-m", "--memory-limit", type=int, help="Memory limit in GB")
+	general_args.add_argument("-m", "--memory-limit", type=int, default=8, help="Memory limit in GB (default 8)")
 	general_args.add_argument("--genus", default="Unknown", help="Provide genus if known")
 	general_args.add_argument("--species", default="sp.", help="Provide species if known")
 	general_args.add_argument("--strain", help="Provide strain if known")
@@ -449,9 +449,9 @@ def assemble(args, reads, estimated_genome_size):
 
 	if args.assembler == "flye":
 
-		if bool(estimated_genome_size) == False:
+		if bool(estimated_genome_size) is False:
 			logger.critical("Impossible to run flye without genome size estimation!")
-			sys.exit(1)
+			exit(1)
 		cmd = ["flye", "-o", aslydir, "-g", str(estimated_genome_size), "-t", str(args.threads)]
 		if "nanopore" in reads.keys():
 			cmd += ["--nano-raw", reads['nanopore']]
