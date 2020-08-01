@@ -148,7 +148,7 @@ def check_reads(args):
 
 	for f in read_list:
 		if f and not os.path.isfile(f):
-			logger.error("File %s doesn't exist" % f)
+			logger.error("File %s doesn't exist", f)
 			raise FileNotFoundError("File %s doesn't exist" % f)
 
 	if args.pe_1 and args.pe_2:
@@ -186,13 +186,13 @@ def create_subdir(parent, child):
 
 
 def run_external(args, cmd, return_code=True):
-	logger.debug("Running: " + " ".join(cmd))
+	logger.debug("Running: %s", " ".join(cmd))
 	if not return_code or not args.transparent:
 		r = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, encoding="utf-8")
 	else:
 		r = subprocess.run(cmd)
 	if r.returncode != 0:
-		logger.error(f'Non-zero return code of "{" ".join(cmd)}"')
+		logger.error("Non-zero return code of %s", " ".join(cmd))
 
 	if return_code:
 		return r.returncode
@@ -200,7 +200,7 @@ def run_external(args, cmd, return_code=True):
 		return r
 
 
-def short_read_QC(args, short_reads):
+def short_read_qc(args, short_reads):
 	logger.info("Read quality control started")
 	qcoutdir = create_subdir(args.output_dir, "QC")
 	reads_to_qc = []
@@ -351,7 +351,7 @@ def mash_estimate(args, reads):
 	sketchprefix = os.path.join(os.path.dirname(reads_to_sketch[0]), "sketch")
 	cmd = ["mash", "sketch", "-r", "-m", str(MINIMUM_COPIES), "-o", sketchprefix]
 	cmd += reads_to_sketch
-	logger.info(f"Estimating genome size with mash using: {', '.join(reads_to_sketch)}.")
+	logger.info("Estimating genome size with mash using: %s", ", ".join(reads_to_sketch))
 	r = run_external(args, cmd, False)
 
 	'''
@@ -400,7 +400,7 @@ def mp_read_processing(args, reads, readdir):
 def map_short_reads(args, assembly, reads, target):
 	cmd = ["minimap2", "-x", "sr", "-t", str(args.threads), "-a", "-o", target, assembly, reads]
 
-	logger.info(f"Mapping reads: {reads}.")
+	logger.info("Mapping reads: %s", reads)
 	rc = run_external(args, cmd, return_code=True)
 	if rc == 0:
 		return target
@@ -418,7 +418,7 @@ def racon_polish(args, assembly, reads):
 		if isinstance(r, (list, tuple)):
 			assembly = racon_polish(args, assembly, r)
 		else:
-			logger.debug(f"Racon genome polishing with: {r}")
+			logger.debug("Racon genome polishing with: %s", r)
 			mapping = map_short_reads(args, assembly, r, target)
 			if mapping:
 				cmd = ['racon', '-t', str(args.threads), r, mapping, assembly]
@@ -435,7 +435,7 @@ def racon_polish(args, assembly, reads):
 						handle.close()
 						assembly = fname
 					except Exception as e:
-						logger.error(f"Error during polishing: impossible to write file {fname}")
+						logger.error("Error during polishing: impossible to write file %s", fname)
 						raise e
 			else:
 				logger.error("Impossible to perform polishing.")
@@ -443,38 +443,43 @@ def racon_polish(args, assembly, reads):
 	return assembly
 
 
+def flye_assemble(args, reads, estimated_genome_size, aslydir):
+	'''
+	Assemble genome with Flye using long reads
+	Returns path to genome assembly or None
+	'''
+	if bool(estimated_genome_size) is False:
+		logger.critical("Impossible to run flye without genome size estimation!")
+		exit(1)
+
+	cmd = ["flye", "-o", aslydir, "-g", str(estimated_genome_size), "-t", str(args.threads)]
+	if "nanopore" in reads.keys():
+		cmd += ["--nano-raw", reads['nanopore']]
+	elif "pacbio" in reads.keys():
+		cmd += ["--pacbio-raw", reads['pacbio']]
+
+	if args.skip_flye_long_polish:
+		cmd += ["--stop-after", "contigger"]
+
+	if run_external(args, cmd, return_code=True) != 0:
+		logger.error("Genome assembly finished with errors.")
+		logger.critical("Plese check %s for more information.", os.path.join(aslydir, "flye.log"))
+		raise Exception("Extermal software error")
+	else:
+		logger.debug("Assembling finished")
+		if args.skip_flye_long_polish:
+			assembly = os.path.join(aslydir, "30-contigger/contigs.fasta")
+		else:
+			assembly = os.path.join(aslydir, "assembly.fasta")
+		return assembly
+
+
 def assemble(args, reads, estimated_genome_size):
 	logger.info("Assembling started")
 	aslydir = os.path.join(args.output_dir, "assembly")
 
 	if args.assembler == "flye":
-
-		if bool(estimated_genome_size) is False:
-			logger.critical("Impossible to run flye without genome size estimation!")
-			exit(1)
-		cmd = ["flye", "-o", aslydir, "-g", str(estimated_genome_size), "-t", str(args.threads)]
-		if "nanopore" in reads.keys():
-			cmd += ["--nano-raw", reads['nanopore']]
-		elif "pacbio" in reads.keys():
-			cmd += ["--pacbio-raw", reads['pacbio']]
-
-		if args.skip_flye_long_polish:
-			cmd += ["--stop-after", "contigger"]
-
-		rc = run_external(args, cmd)
-
-		if rc != 0:
-			logger.error("Genome assembly finished with errors.")
-			logger.error("Plese check %s for more information." % os.path.join(aslydir, "flye.log"))
-			raise Exception("Extermal software error")
-			return None
-		else:
-			logger.debug("Assembling finished")
-			if args.skip_flye_long_polish:
-				assembly = os.path.join(aslydir, "30-contigger/contigs.fasta")
-			else:
-				assembly = os.path.join(aslydir, "assembly.fasta")
-			return assembly
+		return flye_assemble(args, reads, estimated_genome_size, aslydir)
 
 	if args.assembler == "spades":
 
@@ -487,7 +492,7 @@ def assemble(args, reads, estimated_genome_size):
 			spades_stdout = str(subprocess.run(["spades.py", "-v"], stdout=subprocess.PIPE,
 				stderr=subprocess.PIPE, universal_newlines=True).stdout)
 			spades_version = re.search(r'[\d\.]+', spades_stdout)[0]
-			logger.debug(f"SPAdes version: {spades_version}")
+			logger.debug("SPAdes version: %s", spades_version)
 		except Exception as e:
 			logger.critical("Failed to run SPAdes!")
 			raise e
@@ -522,11 +527,9 @@ def assemble(args, reads, estimated_genome_size):
 		if args.spades_k_list:
 			cmd += ["-k", args.spades_k_list]
 
-		rc = run_external(args, cmd)
-
-		if rc != 0:
+		if run_external(args, cmd, return_code=True) != 0:
 			logger.error("Genome assembly finished with errors.")
-			logger.error("Plese check %s for more information." % os.path.join(aslydir, "spades.log"))
+			logger.error("Plese check %s for more information.", os.path.join(aslydir, "spades.log"))
 			raise Exception("Extermal software error")
 		else:
 			logger.debug("Assembling finished")
@@ -541,7 +544,7 @@ def assemble(args, reads, estimated_genome_size):
 			version_stdout = subprocess.run(["unicycler", "--version"], encoding="utf-8",
 				stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
 			version = re.search(r'v(\d\S*)', version_stdout)[1]
-			logger.debug(f"Unicycler version {version} available.")
+			logger.debug("Unicycler version %s available.", version)
 		except Exception as e:
 			logger.critical("Failed to run Unicycler!")
 			raise e
@@ -561,11 +564,9 @@ def assemble(args, reads, estimated_genome_size):
 		if 'pacbio' in reads.keys():
 			cmd += ["-l", reads['pacbio']]
 
-		rc = run_external(args, cmd)
-
-		if rc != 0:
+		if run_external(args, cmd, return_code=True) != 0:
 			logger.error("Genome assembly finished with errors.")
-			logger.error("Plese check %s for more information." % os.path.join(aslydir, "unicycler.log"))
+			logger.error("Plese check %s for more information.", os.path.join(aslydir, "unicycler.log"))
 			raise Exception("Extermal software error")
 		else:
 			logger.debug("Assembling finished")
@@ -587,10 +588,10 @@ def extract_replicons(args, aslydir):
 		repl_lengths = []
 		for line in log.readlines():
 			if regexp.search(line):
-				component, segments, links, length, _, _, status = line.split()
+				_, segments, _, length, _, _, _ = line.split()
 				if int(segments) == 1:
 					repl_lengths.append(int(length.replace(",", "")))
-		logger.debug(f"Extracting {str(len(repl_lengths))} replicon(s).")
+		logger.debug("Extracting %s replicon(s).", str(len(repl_lengths)))
 		with open(assemblyfile, "r") as assembly:
 			replicons = [x for x in SeqIO.parse(assembly, "fasta") if len(x) in repl_lengths]
 			for x in range(len(replicons)):
@@ -607,7 +608,7 @@ def locus_tag_gen(genome):
 	with open(genome, 'rb') as genomefile:
 		digest = hashlib.md5(genomefile.read()).hexdigest()
 		locus_tag = "".join([chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 12, 2)])
-		logger.info("Locus tag generated: %s" % locus_tag)
+		logger.info("Locus tag generated: %s", locus_tag)
 		return locus_tag
 
 
@@ -618,7 +619,7 @@ def annotate(args):
 		version_stdout = subprocess.run(["dfast", "--version"], encoding="utf-8",
 			stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
 		version = re.search(r'ver. (\d\S*)', version_stdout)[1]
-		logger.debug(f"DFAST version {version} available.")
+		logger.debug("DFAST version %s available.", version)
 	except Exception as e:
 		logger.critical("Failed to run DFAST!")
 		raise e
@@ -652,7 +653,7 @@ def check_phix(args):
 	blast_format = "6 sseqid pident slen length"
 	cmd = ["blastn", "-query", phix_path, "-subject", args.genome, "-outfmt", blast_format, "-evalue", "1e-6"]
 
-	logger.debug("Running: " + " ".join(cmd))
+	logger.debug("Running: %s", " ".join(cmd))
 	try:
 		blast_out = str(subprocess.run(cmd, universal_newlines=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout).rstrip()
 	except Exception as e:
@@ -661,13 +662,13 @@ def check_phix(args):
 	phix_contigs = []
 	if bool(blast_out):
 		for line in blast_out.split('\n'):
-			i, p, s, l = line.split("\t")
-			if float(p) > 95.0 and int(s) / int(l) > 0.5:
-				phix_contigs.append(i)
+			sseqid, pident, slen, length = line.split("\t")
+			if float(pident) > 95.0 and int(slen) / int(length) > 0.5:
+				phix_contigs.append(sseqid)
 		phix_contigs = list(set(phix_contigs))
 
 		if len(phix_contigs) > 0:
-			logger.info(f"PhiX was found in: {', '.join(phix_contigs)}")
+			logger.info("PhiX was found in: %s", ', '.join(phix_contigs))
 			newgenome = os.path.join(args.output_dir, "assembly.nophix.fasta")
 			records = [x for x in SeqIO.parse(args.genome, "fasta") if x.id not in phix_contigs]
 			with open(newgenome, "w") as handle:
@@ -714,7 +715,7 @@ def run_checkm(args):
 			args.checkm_taxon = "Archaea" if args.domain == "archaea" else "Bacteria"
 			args.checkm_rank = "domain"
 
-		logger.info(f'{args.checkm_taxon} marker set will be used for CheckM')
+		logger.info("%s marker set will be used for CheckM", args.checkm_taxon)
 
 		cmd += [args.checkm_rank, args.checkm_taxon, checkm_indir, checkm_outdir]
 
@@ -759,8 +760,8 @@ def main():
 		if args.force:
 			shutil.rmtree(args.output_dir)
 		else:
-			logger.critical(f"Output directory \"{args.output_dir}\" already exists.\n" +
-				"Use --force to overwrite or provide another path")
+			logger.critical("Output directory \"%s\" already exists.\nUse --force to overwrite.",
+				args.output_dir)
 			raise FileExistsError(args.output_dir)
 	try:
 		os.mkdir(args.output_dir)
@@ -794,13 +795,13 @@ def main():
 
 	# QC
 	if args.first_step == 1:
-		short_read_QC(args, short_reads_list)
+		short_read_qc(args, short_reads_list)
 		check_last_step(args, 1)
 
 	# Processing
 	if args.first_step <= 2:
 		reads = read_processing(args, reads)
-		logger.debug("Processed reads: " + str(reads))
+		logger.debug("Processed reads: %s", str(reads))
 		check_last_step(args, 2)
 
 	# Assembly
