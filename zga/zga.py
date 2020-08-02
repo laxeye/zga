@@ -2,6 +2,7 @@
 import argparse
 import os.path
 import logging
+import sys
 import shutil
 import subprocess
 import re
@@ -60,7 +61,7 @@ def parse_args():
 	reads_args.add_argument("--genome-size-estimation", action="store_true",
 		help="Estimate genome size with mash.")
 	reads_args.add_argument("--estimated-genome-size",
-		help="Estimated genome for FLye assembler, if known.")
+		help="Estimated genome for Flye assembler, if known.")
 	# Mate pair read processing
 	reads_args.add_argument("--use-unknown-mp", action="store_true",
 		help="Include reads that are probably mate pairs (default: only known MP used)")
@@ -81,9 +82,10 @@ def parse_args():
 		help="Unicycler: assember mode: conservative, normal (default) or bold.")
 	asly_args.add_argument("--linear-seqs", default=0, help="Expected number of linear sequences")
 	asly_args.add_argument("--extract-replicons", action="store_true",
-		help="Unicycler: extract replicons (e.g. plasmids) from the assembly to separate files")
+		help="Unicycler: extract replicons (e.g. plasmids) from the short-read based assembly to separate files")
+	# Flye options
 	asly_args.add_argument("--flye-short-polish", action="store_true",
-		help="Perform polishing of FLye assembly with short reads using racon.")
+		help="Perform polishing of Flye assembly with short reads using racon.")
 	asly_args.add_argument("--skip-flye-long-polish", action="store_true",
 		help="Skip stage of genome polishing with long reads.")
 	asly_args.add_argument("--perform-polishing", action="store_true",
@@ -155,7 +157,7 @@ def check_reads(args):
 		reads['pe'] = (os.path.abspath(args.pe_1), os.path.abspath(args.pe_2))
 	elif args.pe_1 or args.pe_2:
 		logger.error("Single end reads provided as paired. Please use \"--single-end\" option")
-		exit(1)
+		sys.exit(1)
 
 	if args.mp_1 and args.mp_2:
 		reads['mp'] = (os.path.abspath(args.mp_1), os.path.abspath(args.mp_2))
@@ -378,6 +380,7 @@ def mp_read_processing(args, reads, readdir):
 
 	cmd = ["nxtrim", "-1", reads['mp'][0], "-2", reads['mp'][1], "--separate"]
 	cmd += ["--justmp", "-O", prefix, "-l", str(MINLENGTH)]
+	logger.info("Processing mate-pair reads.")
 	if run_external(args, cmd) == 0:
 		if args.use_unknown_mp:
 			with open(f"{prefix}_R1.all.fastq.gz", "wb") as dest:
@@ -450,7 +453,7 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir):
 	'''
 	if bool(estimated_genome_size) is False:
 		logger.critical("Impossible to run flye without genome size estimation!")
-		exit(1)
+		sys.exit(1)
 
 	cmd = ["flye", "-o", aslydir, "-g", str(estimated_genome_size), "-t", str(args.threads)]
 	if "nanopore" in reads.keys():
@@ -581,6 +584,10 @@ def assemble(args, reads, estimated_genome_size):
 
 
 def extract_replicons(args, aslydir):
+	'''
+	Unicycler log is not universal for different input files.
+	Current implementation works only for shor-read based assemblies.
+	'''
 	logfile = os.path.join(aslydir, "unicycler.log")
 	assemblyfile = os.path.join(aslydir, "assembly.fasta")
 	with open(logfile, "r") as log:
@@ -591,16 +598,16 @@ def extract_replicons(args, aslydir):
 				_, segments, _, length, _, _, _ = line.split()
 				if int(segments) == 1:
 					repl_lengths.append(int(length.replace(",", "")))
-		logger.debug("Extracting %s replicon(s).", str(len(repl_lengths)))
+		if len(repl_lengths) == 0:
+			logger.info("No complete replicons found.")
+			return 0
 		with open(assemblyfile, "r") as assembly:
 			replicons = [x for x in SeqIO.parse(assembly, "fasta") if len(x) in repl_lengths]
-			for x in range(len(replicons)):
-				try:
-					F = open(os.path.join(aslydir, f"replicon.{x+1}.fasta"), "w")
-					SeqIO.write(replicons[x], F, "fasta")
-					F.close()
-				except Exception as e:
-					raise e
+			for n, replicon in enumerate(replicons, start=1):
+				with open(os.path.join(aslydir, f"replicon.{n}.fasta"), "w") as F:
+					SeqIO.write(replicon, F, "fasta")
+			logger.info("Extracted %s replicon(s).", str(len(repl_lengths)))
+			return len(replicons)
 
 
 def locus_tag_gen(genome):
@@ -626,8 +633,8 @@ def annotate(args):
 
 	annodir = os.path.join(args.output_dir, "annotation")
 
-	cmd = ["dfast", "-g", args.genome, "-o", annodir, "--organism", " ".join([args.genus, args.species]),
-		"--cpu", str(args.threads)]
+	cmd = ["dfast", "-g", args.genome, "-o", annodir, "--organism",
+		" ".join([args.genus, args.species]), "--cpu", str(args.threads)]
 	if args.strain:
 		cmd += ["--strain", args.strain]
 	if args.center_name:
@@ -740,7 +747,7 @@ def run_checkm(args):
 def check_last_step(args, step):
 	if args.last_step == step:
 		logger.info("Workflow finished!")
-		exit(0)
+		sys.exit(0)
 
 
 def main():
@@ -760,7 +767,7 @@ def main():
 		if args.force:
 			shutil.rmtree(args.output_dir)
 		else:
-			logger.critical("Output directory \"%s\" already exists.\nUse --force to overwrite.",
+			logger.critical("Output directory \"%s\" already exists. Use --force to overwrite.",
 				args.output_dir)
 			raise FileExistsError(args.output_dir)
 	try:
@@ -795,7 +802,10 @@ def main():
 
 	# QC
 	if args.first_step == 1:
-		short_read_qc(args, short_reads_list)
+		if len(short_reads_list) > 0:
+			short_read_qc(args, short_reads_list)
+		else:
+			logger.info("No short reads to analyse with FastQC.")
 		check_last_step(args, 1)
 
 	# Processing

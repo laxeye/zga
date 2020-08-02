@@ -6,35 +6,35 @@
 
 ### Installing dependencies
 
-ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses several software and libs including:
+ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses several software and libraries including:
 
-* fastqc
-* ea-utils
-* BBmap
-* SPAdes (>= 3.12 to support merged paired-end reads, >= 3.5.0 to support Nanopore reads)
-* unicycler
-* CheckM
-* DFast
-* BioPython
-* NCBI BLASTn
-* NxTrim
-* mash
+* [FastQC](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/)
+* [ea-utils](https://github.com/ExpressionAnalysis/ea-utils)
+* [BBmap](https://sourceforge.net/projects/bbmap/)
+* [NxTrim](https://github.com/sequencing/NxTrim)
+* [mash](https://mash.readthedocs.io/en/latest/)
+* [SPAdes](http://cab.spbu.ru/software/spades/) (>= 3.12 to support merged paired-end reads, >= 3.5.0 to support Nanopore reads)
+* [Unicycler](https://github.com/rrwick/Unicycler/)
+* [Flye](https://github.com/fenderglass/Flye) >= 2.6
+* [racon](https://github.com/lbcb-sci/racon)
+* [CheckM](https://github.com/Ecogenomics/CheckM) >= 1.1.0
+* [BioPython](https://biopython.org/)
+* [NCBI BLAST+](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
+* [DFAST](https://github.com/nigyta/dfast_core)
 
 All of them may be installed using **conda**:
 
 It's highly recommended to create a new conda environment:
 
-`conda create -n zga "python>=3.6" fastqc ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim mash`
+`conda create -n zga "python>=3.6" fastqc ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim mash flye racon "samtools>=1.9"`
 
 and activate it
 
 `conda activate zga`
 
-
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install python>=3.6 fastqc ea-utils spades unicycler checkm-genome dfast bbmap blast biopython nxtrim mash`
-
+`conda install "python>=3.6" fastqc ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim mash flye racon "samtools>=1.9"`
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
@@ -81,7 +81,7 @@ Let CheckM to infer the right marker set:
 
 `zga --first-step check_genome -g my_genome.fa --checkm_mode lineage -o my_output_dir`
 
-## Know issues and limitations
+## Known issues and limitations
 
 ZGA is in the stage of active development.
 
@@ -114,6 +114,10 @@ Bushnell, B., Rood, J., & Singer, E. (2017). BBMerge–accurate paired shotgun r
 Bankevich, A., Nurk, S., Antipov, D., Gurevich, A. A., Dvorkin, M., Kulikov, A. S., ... & Pyshkin, A. V. (2012). SPAdes: a new genome assembly algorithm and its applications to single-cell sequencing. Journal of computational biology, 19(5), 455-477.
 
 Wick, R. R., Judd, L. M., Gorrie, C. L., & Holt, K. E. (2017). Unicycler: resolving bacterial genome assemblies from short and long sequencing reads. PLoS computational biology, 13(6), e1005595.
+
+Vaser, R., Sović, I., Nagarajan, N., & Šikić, M. (2017). Fast and accurate de novo genome assembly from long uncorrected reads. Genome research, 27(5), 737-746.
+
+Kolmogorov, M., Yuan, J., Lin, Y., & Pevzner, P. A. (2019). Assembly of long, error-prone reads using repeat graphs. Nature biotechnology, 37(5), 540-546.
 
 Parks, D. H., Imelfort, M., Skennerton, C. T., Hugenholtz, P., & Tyson, G. W. (2015). CheckM: assessing the quality of microbial genomes recovered from isolates, single cells, and metagenomes. Genome research, 25(7), 1043-1055.
 
