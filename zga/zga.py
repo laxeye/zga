@@ -196,16 +196,21 @@ def create_subdir(parent, child):
 	return path
 
 
-def run_external(args, cmd, keep_stdout=False):
+def run_external(args, cmd, keep_stdout=False, keep_stderr=False):
 	logger.debug("Running: %s", " ".join(cmd))
-	if args.transparent and keep_stdout:
-		r = subprocess.run(cmd, stdout=subprocess.PIPE, encoding="utf-8")
-	elif args.transparent and not keep_stdout:
-		r = subprocess.run(cmd, stdout=subprocess.DEVNULL)
-	elif keep_stdout:
-		r = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, encoding="utf-8")
+	stderr_dest = subprocess.PIPE if keep_stderr else subprocess.DEVNULL
+	stdout_dest = subprocess.PIPE if keep_stdout else subprocess.DEVNULL
+
+	if args.transparent:
+		if keep_stdout:
+			r = subprocess.run(cmd, stdout=subprocess.PIPE, encoding="utf-8")
+		elif keep_stderr:
+			r = subprocess.run(cmd, stderr=subprocess.PIPE, encoding="utf-8")
+		else:
+			r = subprocess.run(cmd, stdout=subprocess.DEVNULL)
 	else:
-		r = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, encoding="utf-8")
+		r = subprocess.run(cmd, stderr=stderr_dest, stdout=stdout_dest, encoding="utf-8")
+
 	if r.returncode != 0:
 		logger.error("Non-zero return code of %s", " ".join(cmd))
 
@@ -273,17 +278,20 @@ def merge_bb(args, reads, readdir):
 	return reads
 
 
-def trim_and_filter_pe(args, reads, readdir):
-	# Trimming and filtering constants
-	WINDOW = 3
+def bbduk_process(args, reads, readdir):
+	bbduk_kmer = 19  # K-mer length for contaminant/adapter removal
+	precmd = ["bbduk.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}",
+			f"ref={args.adapters}", f"k={bbduk_kmer}", "ktrim=r",
+			"qtrim=r", f"trimq={args.quality_cutoff}", "entropy=0.1",
+			f"minlength={args.min_short_read_length}"]
 
 	if "pe" in reads.keys():
 		logger.info("Trimming and filtering paired end reads")
 		out_pe1 = os.path.join(readdir, "pe_1.fq")
 		out_pe2 = os.path.join(readdir, "pe_2.fq")
-		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff),
-			"-l", str(args.min_short_read_length), "-w", str(WINDOW), "-o", out_pe1, "-o", out_pe2,
-			args.adapters, reads['pe'][0], reads['pe'][1]]
+		out_stats = os.path.join(readdir, "bbduk.stats.pe.txt")
+		cmd = precmd + [f"in={reads['pe'][0]}", f"in2={reads['pe'][1]}",
+			f"out={out_pe1}", f"out2={out_pe2}", f"stats={out_stats}"]
 
 		if run_external(args, cmd).returncode == 0:
 			for f in reads['pe']:
@@ -293,20 +301,20 @@ def trim_and_filter_pe(args, reads, readdir):
 
 	if "single" in reads.keys():
 		logger.info("Trimming and filtering single end reads")
-		out_single = os.path.join(readdir, "single.fq")
-		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff),
-			"-l", str(args.min_short_read_length),
-			"-w", str(WINDOW), "-o", out_single, "n/a", reads["single"]]
+		out = os.path.join(readdir, "single.fq")
+		out_stats = os.path.join(readdir, "bbduk.stats.se.txt")
+		cmd = precmd + [f"in={reads['single']}", f"out={out}",
+			f"stats={out_stats}"]
 
 		if run_external(args, cmd).returncode == 0:
-			reads['single'] = out_single
+			reads['single'] = out
 
 	if "merged" in reads.keys():
 		logger.info("Trimming and filtering merged paired-end reads")
 		out = os.path.join(readdir, "merged.fq")
-		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff),
-			"-l", str(args.min_short_read_length),
-			"-w", str(WINDOW), "-o", out, "n/a", reads["merged"]]
+		out_stats = os.path.join(readdir, "bbduk.stats.merged.txt")
+		cmd = precmd + [f"in={reads['merged']}", f"out={out}",
+			f"stats={out_stats}"]
 
 		if run_external(args, cmd).returncode == 0:
 			reads['merged'] = out
@@ -327,7 +335,7 @@ def read_processing(args, reads):
 	if args.filter_by_tile and "pe" in reads.keys():
 		reads = filter_by_tile(args, reads, readdir)
 
-	reads = trim_and_filter_pe(args, reads, readdir)
+	reads = bbduk_process(args, reads, readdir)
 
 	# Merging overlapping paired-end reads
 	if "merged" not in reads.keys() and "pe" in reads.keys():
@@ -343,8 +351,6 @@ def read_processing(args, reads):
 
 
 def mash_estimate(args, reads):
-	# Minimum copy number of k-mer to include it
-
 	reads_to_sketch = []
 
 	for readfile in reads.values():
@@ -361,7 +367,7 @@ def mash_estimate(args, reads):
 	cmd = ["mash", "sketch", "-r", "-m", str(args.mash_kmer_copies), "-o", sketchprefix]
 	cmd += reads_to_sketch
 	logger.info("Estimating genome size with mash using: %s", ", ".join(reads_to_sketch))
-	r = run_external(args, cmd)
+	r = run_external(args, cmd, keep_stderr=True)
 
 	'''
 	Parsing mash output to extract estimated genome size
