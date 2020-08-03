@@ -20,11 +20,13 @@ def parse_args():
 	general_args.add_argument("-l", "--last-step", help="Last step of the pipeline", default="annotation",
 		choices=["readqc", "processing", "assembling", "polishing", "check_genome", "annotation"])
 	general_args.add_argument("-o", "--output-dir", required=True, help="Output directory")
-	general_args.add_argument("--force", action="store_true", help="Overwrite output directory if exists")
+	general_args.add_argument("--force", action="store_true",
+		help="Overwrite output directory if exists")
 	# parser.add_argument("--tmp-dir", default="zga-temp", help="Temporary directory")
 	general_args.add_argument("-t", "--threads", type=int, default=1,
 		help="Number of CPU threads to use (where possible)")
-	general_args.add_argument("-m", "--memory-limit", type=int, default=8, help="Memory limit in GB (default 8)")
+	general_args.add_argument("-m", "--memory-limit", type=int, default=8,
+		help="Memory limit in GB (default 8)")
 	general_args.add_argument("--genus", default="Unknown", help="Provide genus if known")
 	general_args.add_argument("--species", default="sp.", help="Provide species if known")
 	general_args.add_argument("--strain", help="Provide strain if known")
@@ -44,7 +46,6 @@ def parse_args():
 	input_args.add_argument("--mp-2", help="Mate pair forward reads. SPAdes only")
 	# parser.add_argument("--pe-interleaved", help="Pair-end interleaved reads")
 	# parser.add_argument("--mp-interleaved", help="Mate pair interleaved reads")
-	# parser.add_argument("--phred-offset", help="")
 	input_args.add_argument("--pacbio", help="PacBio reads")
 	input_args.add_argument("--nanopore", help="Nanopore reads")
 
