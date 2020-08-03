@@ -53,9 +53,12 @@ def parse_args():
 	reads_args.add_argument("-q", "--quality-cutoff", type=int, default=25,
 		help="Base quality cutoff for short reads, default: 25")
 	reads_args.add_argument("--adapters",
-		help="FASTA file with adapter sequences for trimming from short reads. By default Illumina adapter sequences are used.")
+		help="Adapter sequences for short reads trimming (FASTA). "
+		+ "By default Illumina adapter sequences are used.")
 	reads_args.add_argument("--filter-by-tile", action="store_true",
 		help="Filter Illumina reads based on positional quality over a flowcell.")
+	reads_args.add_argument("--min-short-read-length", type=int, default=33,
+		help="Minimum short read length to keep after quality trimming.")
 	reads_args.add_argument("--bbmerge-extend", action="store_true",
 		help="Perform read extension based on k-mers if merging wasn't succesfull.")
 	reads_args.add_argument("--genome-size-estimation", action="store_true",
@@ -80,9 +83,11 @@ def parse_args():
 	asly_args.add_argument("--spades-k-list",
 		help="SPAdes: List of kmers, comma-separated even numbers e.g. '21,33,55,77'")
 	# Unicycler options
-	asly_args.add_argument("--unicycler-mode", default="normal", choices=['conservative', 'normal', 'bold'],
+	asly_args.add_argument("--unicycler-mode", default="normal",
+		choices=['conservative', 'normal', 'bold'],
 		help="Unicycler: assember mode: conservative, normal (default) or bold.")
-	asly_args.add_argument("--linear-seqs", default=0, help="Expected number of linear sequences")
+	asly_args.add_argument("--linear-seqs", default=0,
+		help="Expected number of linear sequences")
 	asly_args.add_argument("--extract-replicons", action="store_true",
 		help="Unicycler: extract replicons (e.g. plasmids) from the short-read based assembly to separate files")
 	# Flye options
@@ -92,6 +97,8 @@ def parse_args():
 		help="Skip stage of genome polishing with long reads.")
 	asly_args.add_argument("--perform-polishing", action="store_true",
 		help="Perform polishing. Useful only for flye assembly of long reads and short reads available.")
+	asly_args.add_argument("--polishing-iterations", default=1,
+		help="Number of polishing iterations.")
 
 	check_args = parser.add_argument_group(title="Genome check settings")
 	# phiX
@@ -114,7 +121,7 @@ def parse_args():
 	anno_args.add_argument("--locus-tag-inc", default=10, type=int,
 		help="Locus tag increment, default = 10")
 	anno_args.add_argument("--center-name", help="Genome center name.")
-	anno_args.add_argument("--minimum-length", help="Minimum sequence length in genome assembly.")
+	anno_args.add_argument("--minimum-contig-length", help="Minimum sequence length in genome assembly.")
 
 	args = parser.parse_args()
 
@@ -184,24 +191,25 @@ def create_subdir(parent, child):
 	try:
 		os.mkdir(path)
 	except Exception as e:
-		logger.critical(f"Impossible to create directory \"%s\"", path)
+		logger.critical("Impossible to create directory \"%s\"", path)
 		raise e
 	return path
 
 
-def run_external(args, cmd, return_code=True):
+def run_external(args, cmd, keep_stdout=False):
 	logger.debug("Running: %s", " ".join(cmd))
-	if not return_code or not args.transparent:
+	if args.transparent and keep_stdout:
+		r = subprocess.run(cmd, stdout=subprocess.PIPE, encoding="utf-8")
+	elif args.transparent and not keep_stdout:
+		r = subprocess.run(cmd, stdout=subprocess.DEVNULL)
+	elif keep_stdout:
 		r = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE, encoding="utf-8")
 	else:
-		r = subprocess.run(cmd)
+		r = subprocess.run(cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, encoding="utf-8")
 	if r.returncode != 0:
 		logger.error("Non-zero return code of %s", " ".join(cmd))
 
-	if return_code:
-		return r.returncode
-	else:
-		return r
+	return r
 
 
 def read_qc(args, reads):
@@ -227,9 +235,7 @@ def filter_by_tile(args, reads, readdir):
 	cmd = ["filterbytile.sh", f"in={reads['pe'][0]}", f"in2={reads['pe'][1]}",
 	f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}"]
 
-	rc = run_external(args, cmd)
-
-	if rc == 0:
+	if run_external(args, cmd).returncode == 0:
 		for f in reads['pe']:
 			if os.path.dirname(f) == readdir and os.path.exists(f):
 				os.remove(f)
@@ -257,9 +263,7 @@ def merge_bb(args, reads, readdir):
 		cmd += ["qtrim2=t", f"trimq={bb_trimq}"]
 	logger.info("Merging paired-end reads.")
 
-	rc = run_external(args, cmd)
-
-	if rc == 0:
+	if run_external(args, cmd).returncode == 0:
 		for f in reads['pe']:
 			if os.path.dirname(f) == readdir and os.path.exists(f):
 				os.remove(f)
@@ -271,17 +275,17 @@ def merge_bb(args, reads, readdir):
 
 def trim_and_filter_pe(args, reads, readdir):
 	# Trimming and filtering constants
-	MINLEN = 33
 	WINDOW = 3
 
 	if "pe" in reads.keys():
 		logger.info("Trimming and filtering paired end reads")
 		out_pe1 = os.path.join(readdir, "pe_1.fq")
 		out_pe2 = os.path.join(readdir, "pe_2.fq")
-		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff), "-l", str(MINLEN),
-			"-w", str(WINDOW), "-o", out_pe1, "-o", out_pe2, args.adapters, reads['pe'][0], reads['pe'][1]]
-		rc = run_external(args, cmd)
-		if rc == 0:
+		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff),
+			"-l", str(args.min_short_read_length), "-w", str(WINDOW), "-o", out_pe1, "-o", out_pe2,
+			args.adapters, reads['pe'][0], reads['pe'][1]]
+
+		if run_external(args, cmd).returncode == 0:
 			for f in reads['pe']:
 				if os.path.dirname(f) == readdir and os.path.exists(f):
 					os.remove(f)
@@ -290,21 +294,21 @@ def trim_and_filter_pe(args, reads, readdir):
 	if "single" in reads.keys():
 		logger.info("Trimming and filtering single end reads")
 		out_single = os.path.join(readdir, "single.fq")
-		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff), "-l", str(MINLEN),
+		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff),
+			"-l", str(args.min_short_read_length),
 			"-w", str(WINDOW), "-o", out_single, "n/a", reads["single"]]
 
-		rc = run_external(args, cmd)
-		if rc == 0:
+		if run_external(args, cmd).returncode == 0:
 			reads['single'] = out_single
 
 	if "merged" in reads.keys():
 		logger.info("Trimming and filtering merged paired-end reads")
 		out = os.path.join(readdir, "merged.fq")
-		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff), "-l", str(MINLEN),
+		cmd = ["fastq-mcf", "-H", "-X", "-q", str(args.quality_cutoff),
+			"-l", str(args.min_short_read_length),
 			"-w", str(WINDOW), "-o", out, "n/a", reads["merged"]]
 
-		rc = run_external(args, cmd)
-		if rc == 0:
+		if run_external(args, cmd).returncode == 0:
 			reads['merged'] = out
 
 	return reads
@@ -357,7 +361,7 @@ def mash_estimate(args, reads):
 	cmd = ["mash", "sketch", "-r", "-m", str(args.mash_kmer_copies), "-o", sketchprefix]
 	cmd += reads_to_sketch
 	logger.info("Estimating genome size with mash using: %s", ", ".join(reads_to_sketch))
-	r = run_external(args, cmd, False)
+	r = run_external(args, cmd)
 
 	'''
 	Parsing mash output to extract estimated genome size
@@ -379,12 +383,11 @@ def mash_estimate(args, reads):
 
 def mp_read_processing(args, reads, readdir):
 	prefix = os.path.join(readdir, "nxtrim")
-	MINLENGTH = 31
 
 	cmd = ["nxtrim", "-1", reads['mp'][0], "-2", reads['mp'][1], "--separate"]
-	cmd += ["--justmp", "-O", prefix, "-l", str(MINLENGTH)]
+	cmd += ["--justmp", "-O", prefix, "-l", str(args.min_short_read_length)]
 	logger.info("Processing mate-pair reads.")
-	if run_external(args, cmd) == 0:
+	if run_external(args, cmd).returncode == 0:
 		if args.use_unknown_mp:
 			with open(f"{prefix}_R1.all.fastq.gz", "wb") as dest:
 				with open(f"{prefix}_R1.mp.fastq.gz", "rb") as src:
@@ -407,8 +410,7 @@ def map_short_reads(args, assembly, reads, target):
 	cmd = ["minimap2", "-x", "sr", "-t", str(args.threads), "-a", "-o", target, assembly, reads]
 
 	logger.info("Mapping reads: %s", reads)
-	rc = run_external(args, cmd, return_code=True)
-	if rc == 0:
+	if run_external(args, cmd).returncode == 0:
 		return target
 	else:
 		logger.error("Unsuccesful mapping.")
@@ -420,15 +422,15 @@ def racon_polish(args, assembly, reads):
 	if not os.path.isdir(polish_dir):
 		polish_dir = create_subdir(args.output_dir, "polishing")
 	target = os.path.join(polish_dir, "mapping.sam")
-	for r in reads:
-		if isinstance(r, (list, tuple)):
-			assembly = racon_polish(args, assembly, r)
+	for readfile in reads:
+		if isinstance(readfile, (list, tuple)):
+			assembly = racon_polish(args, assembly, readfile)
 		else:
-			logger.debug("Racon genome polishing with: %s", r)
-			mapping = map_short_reads(args, assembly, r, target)
+			logger.debug("Racon genome polishing with: %s", readfile)
+			mapping = map_short_reads(args, assembly, readfile, target)
 			if mapping:
-				cmd = ['racon', '-t', str(args.threads), r, mapping, assembly]
-				r = run_external(args, cmd, return_code=False)
+				cmd = ["racon", "-t", str(args.threads), readfile, mapping, assembly]
+				r = run_external(args, cmd, keep_stdout=True)
 				if os.path.exists(mapping):
 					os.remove(mapping)
 				if r.returncode == 0:
@@ -467,7 +469,7 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir):
 	if args.skip_flye_long_polish:
 		cmd += ["--stop-after", "contigger"]
 
-	if run_external(args, cmd, return_code=True) != 0:
+	if run_external(args, cmd).returncode != 0:
 		logger.error("Genome assembly finished with errors.")
 		logger.critical("Plese check %s for more information.", os.path.join(aslydir, "flye.log"))
 		raise Exception("Extermal software error")
@@ -533,7 +535,7 @@ def assemble(args, reads, estimated_genome_size):
 		if args.spades_k_list:
 			cmd += ["-k", args.spades_k_list]
 
-		if run_external(args, cmd, return_code=True) != 0:
+		if run_external(args, cmd).returncode != 0:
 			logger.error("Genome assembly finished with errors.")
 			logger.error("Plese check %s for more information.", os.path.join(aslydir, "spades.log"))
 			raise Exception("Extermal software error")
@@ -570,7 +572,7 @@ def assemble(args, reads, estimated_genome_size):
 		if 'pacbio' in reads.keys():
 			cmd += ["-l", reads['pacbio']]
 
-		if run_external(args, cmd, return_code=True) != 0:
+		if run_external(args, cmd).returncode != 0:
 			logger.error("Genome assembly finished with errors.")
 			logger.error("Plese check %s for more information.", os.path.join(aslydir, "unicycler.log"))
 			raise Exception("Extermal software error")
@@ -648,11 +650,10 @@ def annotate(args):
 		cmd += ["--locus_tag_prefix", args.locus_tag]
 	if args.locus_tag_inc:
 		cmd += ["--step", str(args.locus_tag_inc)]
-	if args.minimum_length:
-		cmd += ["--minimum_length", args.minimum_length]
+	if args.minimum_contig_length:
+		cmd += ["--minimum_length", args.minimum_contig_length]
 
-	rc = run_external(args, cmd)
-	if rc == 0:
+	if run_external(args, cmd).returncode == 0:
 		args.genome = os.path.join(annodir, "genome.fna")
 	return args.genome
 
@@ -735,7 +736,7 @@ def run_checkm(args):
 			cmd += ["--reduced_tree"]
 		cmd += ["--pplacer_threads", str(args.threads), checkm_indir, checkm_outdir]
 
-	rc = run_external(args, cmd)
+	rc = run_external(args, cmd).returncode
 
 	# Cleaning after CheckM
 	shutil.rmtree(checkm_indir)
@@ -776,7 +777,7 @@ def main():
 	try:
 		os.mkdir(args.output_dir)
 	except Exception as e:
-		logger.critical(f"Imposible to create directory{args.output_dir}!")
+		logger.critical("Imposible to create directory \"%s\"!", args.output_dir)
 		raise e
 
 	fh = logging.FileHandler(os.path.join(args.output_dir, "zga.log"))
@@ -792,7 +793,7 @@ def main():
 	args.last_step = steps[args.last_step]
 	if args.first_step <= 4:
 		reads = check_reads(args)
-		logger.debug("Reads: " + str(reads))
+		logger.debug("Input reads: %s", reads)
 		if len(list(reads)) == 0:
 			logger.critical("No reads provided for genome assembly")
 			raise Exception("No reads provided for genome assembly")
@@ -824,12 +825,14 @@ def main():
 		check_last_step(args, 3)
 
 	# Short read polishing is only meaningful for flye assembly
-	if args.first_step <= 4 and args.perform_polishing and args.assembler == 'flye':
+	if args.first_step <= 4 and args.perform_polishing:
 		if len(short_reads_list) > 0:
-			logger.info("Performing genome polishing.")
-			args.genome = racon_polish(args, args.genome, short_reads_list)
-			args.genome = shutil.copy2(args.genome, os.path.join(args.output_dir, "assembly.polished.fasta"))
-			logger.info(f"Genome polishing finished. Polished genome strored at: {args.genome}")
+			for x in range(args.polishing_iterations):
+				logger.info("Performing genome polishing. Iteration %s.", x)
+				args.genome = racon_polish(args, args.genome, short_reads_list)
+			args.genome = shutil.copy2(args.genome,
+				os.path.join(args.output_dir, "assembly.polished.fasta"))
+			logger.info("Genome polishing finished. Polished genome: %s.", args.genome)
 		else:
 			logger.error("Short reads are not provided for polishing of flye assembly.")
 		check_last_step(args, 4)
@@ -845,9 +848,9 @@ def main():
 				completeness, contamination, heterogeneity = list(map(float, result.readlines()[3].split()[-3::1]))
 				if completeness < 80.0 or (completeness - 5.0 * contamination < 50.0):
 					logger.info("The genome assembly has low quality!")
-				logger.info(f"Genome completeness: {completeness}%")
-				logger.info(f"Genome contamination: {contamination}%")
-				logger.info(f"Genome heterogeneity: {heterogeneity}%")
+				logger.info("Genome completeness: %s%%", completeness)
+				logger.info("Genome contamination: %s%%", contamination)
+				logger.info("Genome heterogeneity: %s%%", heterogeneity)
 		check_last_step(args, 5)
 
 	# Annotation
