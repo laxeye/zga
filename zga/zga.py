@@ -15,10 +15,10 @@ def parse_args():
 
 	# General options
 	general_args = parser.add_argument_group(title="General options", description="")
-	general_args.add_argument("-s", "--first-step", help="First step of the pipeline", default="qc",
-		choices=["qc", "processing", "assembling", "polishing", "check_genome", "annotation"])
+	general_args.add_argument("-s", "--first-step", help="First step of the pipeline", default="readqc",
+		choices=["readqc", "processing", "assembling", "polishing", "check_genome", "annotation"])
 	general_args.add_argument("-l", "--last-step", help="Last step of the pipeline", default="annotation",
-		choices=["qc", "processing", "assembling", "polishing", "check_genome", "annotation"])
+		choices=["readqc", "processing", "assembling", "polishing", "check_genome", "annotation"])
 	general_args.add_argument("-o", "--output-dir", required=True, help="Output directory")
 	general_args.add_argument("--force", action="store_true", help="Overwrite output directory if exists")
 	# parser.add_argument("--tmp-dir", default="zga-temp", help="Temporary directory")
@@ -202,18 +202,20 @@ def run_external(args, cmd, return_code=True):
 		return r
 
 
-def short_read_qc(args, short_reads):
+def read_qc(args, reads):
 	logger.info("Read quality control started")
-	qcoutdir = create_subdir(args.output_dir, "QC")
-	reads_to_qc = []
-	for r in short_reads:
+	qcoutdir = create_subdir(args.output_dir, "readQC")
+	precmd = ["fastp", "-L", "-Q", "-G", "-A", "-z", "1", "--stdout", "-w", str(args.threads)]
+	for r in reads.values():
 		if isinstance(r, (list, tuple)):
-			reads_to_qc += list(r)
+			prefix = os.path.join(qcoutdir,os.path.split(r[0])[-1])
+			cmd = precmd + ["-i", r[0], "-I", r[1]]
 		else:
-			reads_to_qc.append(r)
-	cmd = ["fastqc", "-q", "-t", str(args.threads), "-o", qcoutdir] + reads_to_qc
-
-	return run_external(args, cmd)
+			prefix = os.path.join(qcoutdir,os.path.split(r)[-1])
+			cmd = precmd + ["-i", r]
+		cmd += ["-h", f"{prefix}.html", "-j", f"{prefix}.json"]
+		logger.debug("QC of %s", r)
+		run_external(args, cmd)
 
 
 def filter_by_tile(args, reads, readdir):
@@ -783,7 +785,7 @@ def main():
 
 	logger.info("Pipeline started")
 
-	steps = {"qc": 1, "processing": 2, "assembling": 3, "polishing": 4,
+	steps = {"readqc": 1, "processing": 2, "assembling": 3, "polishing": 4,
 		"annotation": 6, "check_genome": 5}
 	args.first_step = steps[args.first_step]
 	args.last_step = steps[args.last_step]
@@ -800,12 +802,9 @@ def main():
 		logger.error("Genome assembly is not provided")
 		raise FileNotFoundError()
 
-	# QC
+	# Read QC
 	if args.first_step == 1:
-		if len(short_reads_list) > 0:
-			short_read_qc(args, short_reads_list)
-		else:
-			logger.info("No short reads to analyse with FastQC.")
+		read_qc(args, reads)
 		check_last_step(args, 1)
 
 	# Processing
