@@ -62,6 +62,8 @@ def parse_args():
 		help="Estimate genome size with mash.")
 	reads_args.add_argument("--estimated-genome-size",
 		help="Estimated genome for Flye assembler, if known.")
+	reads_args.add_argument("--mash-kmer-copies", type=int, default=10,
+		help="Minimum copies of each k-mer to inslude in size estimation")
 	# Mate pair read processing
 	reads_args.add_argument("--use-unknown-mp", action="store_true",
 		help="Include reads that are probably mate pairs (default: only known MP used)")
@@ -182,7 +184,7 @@ def create_subdir(parent, child):
 	try:
 		os.mkdir(path)
 	except Exception as e:
-		logger.critical(f"Impossible to create directory: {path}")
+		logger.critical(f"Impossible to create directory \"%s\"", path)
 		raise e
 	return path
 
@@ -338,7 +340,6 @@ def read_processing(args, reads):
 
 def mash_estimate(args, reads):
 	# Minimum copy number of k-mer to include it
-	MINIMUM_COPIES = 5
 
 	reads_to_sketch = []
 
@@ -353,7 +354,7 @@ def mash_estimate(args, reads):
 		return None
 
 	sketchprefix = os.path.join(os.path.dirname(reads_to_sketch[0]), "sketch")
-	cmd = ["mash", "sketch", "-r", "-m", str(MINIMUM_COPIES), "-o", sketchprefix]
+	cmd = ["mash", "sketch", "-r", "-m", str(args.mash_kmer_copies), "-o", sketchprefix]
 	cmd += reads_to_sketch
 	logger.info("Estimating genome size with mash using: %s", ", ".join(reads_to_sketch))
 	r = run_external(args, cmd, False)

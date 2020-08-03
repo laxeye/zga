@@ -26,7 +26,7 @@ All of them may be installed using **conda**:
 
 It's highly recommended to create a new conda environment:
 
-`conda create -n zga "python>=3.6" fastp ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim mash flye racon "samtools>=1.9"`
+`conda create -n zga "python>=3.6" fastp ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye racon "samtools>=1.9"`
 
 and activate it
 
@@ -34,7 +34,7 @@ and activate it
 
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install "python>=3.6" fastp ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim mash flye racon "samtools>=1.9"`
+`conda install "python>=3.6" fastp ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye racon "samtools>=1.9"`
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
