@@ -60,8 +60,13 @@ def parse_args():
 		help="Filter Illumina reads based on positional quality over a flowcell.")
 	reads_args.add_argument("--min-short-read-length", type=int, default=33,
 		help="Minimum short read length to keep after quality trimming.")
-	reads_args.add_argument("--bbmerge-extend", action="store_true",
-		help="Perform read extension based on k-mers if merging wasn't succesfull.")
+	reads_args.add_argument("--bbmerge-extend", type=int,
+		help="Perform read extension by specified length based on k-mers "
+		+ "if initial merging wasn't succesfull.")
+	reads_args.add_argument("--bbmerge-extend-kmer", type=int, default=40,
+		help="K-mer length for read extension, default 40.")
+	reads_args.add_argument("--bbmerge-trim", type=int,
+		help="Before merging trim bases with phred score less than a specified value.")
 	reads_args.add_argument("--genome-size-estimation", action="store_true",
 		help="Estimate genome size with mash.")
 	reads_args.add_argument("--estimated-genome-size",
@@ -251,22 +256,22 @@ def filter_by_tile(args, reads, readdir):
 
 
 def merge_bb(args, reads, readdir):
-	# Worth to be args?
-	bb_trim = True
-	bb_trimq = 10
-	bb_kmer = 40
-	bb_extend = 40
-
+	'''Performs overlapping paired reads merging (and extension).
+	reads - dict of input reads
+	readdir - path to reads output directory
+	Retruns reads, modified if bbmerge returns 0.
+	'''
 	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
 	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
 	merged = os.path.join(readdir, "merged.fq.gz")
-	cmd = ["bbmerge.sh", f"Xmx={str(args.memory_limit)}G",
+	cmd = ["bbmerge.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}"
 		f"in1={reads['pe'][0]}", f"in2={reads['pe'][1]}",
 		f"outu1={notmerged_r1}", f"outu2={notmerged_r2}", f"out={merged}"]
 	if args.bbmerge_extend:
-		cmd += [f"extend2={bb_extend}", f"k={bb_kmer}", "rsem=t"]
-	if bb_trim:
-		cmd += ["qtrim2=t", f"trimq={bb_trimq}"]
+		cmd += [f"extend2={args.bbmerge_extend}",
+		f"k={args.bbmerge_extend_kmer}", "rsem=t"]
+	if args.bbmerge_trim:
+		cmd += ["qtrim2=t", f"trimq={args.bbmerge_trim}"]
 	logger.info("Merging paired-end reads.")
 
 	if run_external(args, cmd).returncode == 0:
@@ -381,7 +386,8 @@ def mash_estimate(args, reads):
 		result = r.stderr.split("\n")
 		estimations = [float(x.split()[-1]) for x in result if "Estimated" in x.split()]
 		best_estimation = sorted(zip(estimations[::2], estimations[1::2]), key=lambda x: -x[1])[0]
-		logger.info(f"Estimated genome size is {int(best_estimation[0])} at coverage {best_estimation[1]}.")
+		logger.info("Estimated genome size is %s bp at coverage %s.",
+			int(best_estimation[0]), best_estimation[1])
 		return int(best_estimation[0])
 	else:
 		logger.error("Genome size estimation with \"mash\" failed.")
