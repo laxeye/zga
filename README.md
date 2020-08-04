@@ -9,7 +9,6 @@
 ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses several software and libraries including:
 
 * [fastp](https://github.com/OpenGene/fastp)
-* [ea-utils](https://github.com/ExpressionAnalysis/ea-utils)
 * [BBmap](https://sourceforge.net/projects/bbmap/)
 * [NxTrim](https://github.com/sequencing/NxTrim)
 * [mash](https://mash.readthedocs.io/en/latest/)
@@ -26,7 +25,7 @@ All of them may be installed using **conda**:
 
 It's highly recommended to create a new conda environment:
 
-`conda create -n zga "python>=3.6" fastp ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye racon "samtools>=1.9"`
+`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye racon "samtools>=1.9"`
 
 and activate it
 
@@ -34,7 +33,7 @@ and activate it
 
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install "python>=3.6" fastp ea-utils "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye racon "samtools>=1.9"`
+`conda install "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye racon "samtools>=1.9"`
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
@@ -106,8 +105,6 @@ Korzhenkov A. (2020). ZGA: prokaryotic genome assembly and annotation pipeline.
 And of course tools it's using:
 
 Chen, S., Zhou, Y., Chen, Y., & Gu, J. (2018). fastp: an ultra-fast all-in-one FASTQ preprocessor. Bioinformatics, 34(17), i884-i890. https://doi.org/10.1093/bioinformatics/bty560
-
-Aronesty, E. (2013). Comparison of sequencing utility programs. The open bioinformatics journal, 7(1).
 
 Bushnell, B., Rood, J., & Singer, E. (2017). BBMerge–accurate paired shotgun read merging via overlap. PloS one, 12(10).
 
