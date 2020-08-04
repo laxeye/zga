@@ -264,7 +264,7 @@ def merge_bb(args, reads, readdir):
 	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
 	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
 	merged = os.path.join(readdir, "merged.fq.gz")
-	cmd = ["bbmerge.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}"
+	cmd = ["bbmerge.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}",
 		f"in1={reads['pe'][0]}", f"in2={reads['pe'][1]}",
 		f"outu1={notmerged_r1}", f"outu2={notmerged_r2}", f"out={merged}"]
 	if args.bbmerge_extend:
@@ -708,6 +708,7 @@ def run_checkm(args):
 	try:
 		shutil.copy(args.genome, checkm_indir)
 	except Exception as e:
+		logger.critical("Failed to copy \"%s\" to %s", args.genome, checkm_indir)
 		raise e
 
 	checkm_outdir = os.path.join(args.output_dir, "checkm")
@@ -719,9 +720,10 @@ def run_checkm(args):
 		cmd = ["checkm", "taxonomy_wf", "-f", checkm_outfile, "-x", checkm_ext, "-t", str(args.threads)]
 
 		try:
-			checkm_taxon_list = str(subprocess.run(["checkm", "taxon_list"],
-				universal_newlines=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout)
+			checkm_taxon_list = subprocess.run(["checkm", "taxon_list"], encoding="utf-8",
+				universal_newlines=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE).stdout
 		except Exception as e:
+			logger.critical("Failed to run CheckM!")
 			raise e
 
 		if args.checkm_taxon and args.checkm_rank:
@@ -731,7 +733,8 @@ def run_checkm(args):
 					found = True
 					break
 			if not found:
-				logger.error(f'Taxon {args.checkm_taxon} of rank {args.checkm_rank} not available for CheckM')
+				logger.error("Taxon %s of rank %s not available for CheckM",
+					args.checkm_taxon, args.checkm_rank)
 				args.checkm_taxon = None
 				args.checkm_rank = None
 
