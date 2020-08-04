@@ -37,7 +37,7 @@ or create a fresh environment and activate it:
 `conda create -n zga -c laxeye zga`  
 `conda activate zga`
 
-[(https://anaconda.org/laxeye/zga/badges/latest_release_date.svg)](https://anaconda.org/laxeye/zga/)
+[![Anaconda latest release](https://anaconda.org/laxeye/zga/badges/latest_release_date.svg)](https://anaconda.org/laxeye/zga/)
 
 ### Installing dependencies
 
