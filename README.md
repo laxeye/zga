@@ -1,10 +1,9 @@
 # ZGA - prokaryotic genome assembly and annotation pipeline
 
 [![version status](https://img.shields.io/pypi/v/zga.svg)](https://pypi.python.org/pypi/zga)
+[![Anaconda Cloud](https://anaconda.org/laxeye/zga/badges/installer/conda.svg)](https://anaconda.org/laxeye/zga/)
 
 ## Installation
-
-### Installing dependencies
 
 ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses several software and libraries including:
 
@@ -21,7 +20,28 @@ ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses sev
 * [NCBI BLAST+](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
 * [DFAST](https://github.com/nigyta/dfast_core)
 
-All of them may be installed using **conda**:
+### Install with conda
+
+The simplest way to install ZGA and all dependencies is conda:
+
+1. You need to install conda, e.g. [**miniconda**](https://conda.io/en/latest/miniconda.html). Python 3.7 is preferred.
+
+2. After installation You should add channels - the conda's software sources:  
+`conda config --add channels defaults`  
+`conda config --add channels bioconda`  
+`conda config --add channels conda-forge`
+
+3. At the end You should install ZGA to an existing active environment (Python 3.6 or 3.7):  
+`conda install -c laxeye zga`  
+or create a fresh environment and activate it:  
+`conda create -n zga -c laxeye zga`  
+`conda activate zga`
+
+[(https://anaconda.org/laxeye/zga/badges/latest_release_date.svg)](https://anaconda.org/laxeye/zga/)
+
+### Installing dependencies
+
+All dependencies may be installed using **conda**:
 
 It's highly recommended to create a new conda environment:
 
@@ -37,9 +57,9 @@ Otherwise you may install dependencies to existing conda environment:
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
-### Install from PyPi
+### Install from PyPI
 
-Run `pip install zga` it will check if You have Biopython and istall it if not. But all other dependencies You should install manually or using **conda**. CheckM is available on **PyPi**, but it's easier to install it using **conda**.
+Run `pip install zga`. Biopython is the only one dependency installed from PyPI. All other dependencies You should install manually or using **conda** as mentioned above. CheckM is available on **PyPi**, but it's easier to install it using **conda**.
 
 ### Get source from Github
 
@@ -62,21 +82,23 @@ Perform all steps: read qc, read trimming and merging, assembly, CheckM assesmen
 
 `zga -1 R1.fastq.gz -2 R2.fastq.gz --threads 4 -o my_assembly`
 
-or use SPAdes and provide it with paired-end and nanopore reads of archaeal genome (CheckM will use archaeal markers)
+Assemble with SPAdes using paired-end and nanopore reads of archaeal genome (CheckM will use archaeal markers) altering memory limit to 16 GB:
 
-`zga -1 R1.fastq.gz -2 R2.fastq.gz --nanopore MiniION.fastq.gz -a spades --threads 4 --domain archaea -o my_assembly`
+`zga -1 R1.fastq.gz -2 R2.fastq.gz --nanopore MiniION.fastq.gz -a spades --threads 4 --memory-limit 16 --domain archaea -o my_assembly`
 
-or from Nanopore reads using only unicycler
+Assemble long reads with Flye skipping long read polishing and perfom short-read polishing with racon:
 
-`zga --first-step assembling --nanopore MiniION.fastq.gz -o nanopore_assembly`
+`zga -1 R1.fastq.gz -2 R2.fastq.gz --nanopore MiniION.fastq.gz -a flye --threads 4 --domain archaea -o my_assembly --flye-short-polish --skip-flye-long-polish`
 
-Perform genome assesment and annotation:
+Assemble from Nanopore reads using unicycler:
 
-With 'Pectobacterium' CheckM marker set: 
+`zga -a unicycler --nanopore MiniION.fastq -o nanopore_assembly`
+
+Perform assesment and annotation of genome assembly with 'Pectobacterium' CheckM marker set:
 
 `zga --first-step check_genome -g pectobacterium_sp.fasta --checkm_rank genus --checkm_taxon Pectobacterium -o my_output_dir`
 
-Let CheckM to infer the right marker set: 
+Let CheckM to infer the right marker set:
 
 `zga --first-step check_genome -g my_genome.fa --checkm_mode lineage -o my_output_dir`
 
@@ -84,13 +106,9 @@ Let CheckM to infer the right marker set:
 
 ZGA is in the stage of active development.
 
-I hope to fix next issues *ASAP*:
-
-* It's not posible to provide multiple read libraries i.e. two sets of PE reads or two nanopore runs.
-* There is no conda package
-
 Known issues and limitations:
 
+* It's not posible to provide multiple read libraries i.e. two sets of PE reads or two nanopore runs.
 * Unicycler doesn't use mate-pair reads.
 * It's not possible to install all dependencies with Python 3.8 via conda, please use 3.7 or 3.6.
 
