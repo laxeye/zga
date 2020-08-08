@@ -97,7 +97,7 @@ def parse_args():
 	# Flye options
 	asly_args.add_argument("--flye-short-polish", action="store_true",
 		help="Perform polishing of Flye assembly with short reads using racon.")
-	asly_args.add_argument("--skip-flye-long-polish", action="store_true",
+	asly_args.add_argument("--flye-skip-long-polish", action="store_true",
 		help="Skip stage of genome polishing with long reads.")
 	asly_args.add_argument("--perform-polishing", action="store_true",
 		help="Perform polishing. Useful only for flye assembly of long reads and short reads available.")
@@ -514,7 +514,7 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
 	elif "pacbio" in reads.keys():
 		cmd += ["--pacbio-raw", reads['pacbio']]
 
-	if args.skip_flye_long_polish:
+	if args.flye_skip_long_polish:
 		cmd += ["--stop-after", "contigger"]
 
 	if run_external(args, cmd).returncode != 0:
@@ -523,7 +523,7 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
 		raise Exception("Extermal software error")
 	else:
 		logger.debug("Assembling finished")
-		if args.skip_flye_long_polish:
+		if args.flye_skip_long_polish:
 			assembly = os.path.join(aslydir, "30-contigger/contigs.fasta")
 		else:
 			assembly = os.path.join(aslydir, "assembly.fasta")

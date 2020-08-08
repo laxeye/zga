@@ -41,9 +41,7 @@ or create a fresh environment and activate it:
 
 ### Installing dependencies
 
-All dependencies may be installed using **conda**:
-
-It's highly recommended to create a new conda environment:
+You may install all dependencies separately using **conda**. It's highly recommended to create a new conda environment:
 
 `conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye racon "samtools>=1.9"`
 
@@ -64,7 +62,7 @@ Run `pip install zga`. Biopython is the only one dependency installed from PyPI.
 ### Get source from Github
 
 You can get ZGA by cloning from the repository with `git clone https://github.com/laxeye/zga.git` or by downloading an archive.
-After downloading enter the directory and run `python3 setup.py build && python3 setup.py install`.
+After downloading enter the directory `cd zga` and run `python3 setup.py install`.
 
 ### Operating systems requirements
 
@@ -88,7 +86,7 @@ Assemble with SPAdes using paired-end and nanopore reads of archaeal genome (Che
 
 Assemble long reads with Flye skipping long read polishing and perfom short-read polishing with racon:
 
-`zga -1 R1.fastq.gz -2 R2.fastq.gz --nanopore MiniION.fastq.gz -a flye --threads 4 --domain archaea -o my_assembly --flye-short-polish --skip-flye-long-polish`
+`zga -1 R1.fastq.gz -2 R2.fastq.gz --nanopore MiniION.fastq.gz -a flye --threads 4 --domain archaea -o my_assembly --flye-short-polish --flye-skip-long-polish`
 
 Assemble from Nanopore reads using unicycler:
 
@@ -118,7 +116,7 @@ Don't hesitate to report bugs or features!
 
 It's a great pleasure to know, that your software is useful. Please cite ZGA:
 
-Korzhenkov A. (2020). ZGA: prokaryotic genome assembly and annotation pipeline.
+Korzhenkov A. (2020). ZGA: prokaryotic genome assembly and annotation pipeline. URL: https://github.com/laxeye/zga/
 
 And of course tools it's using:
 
