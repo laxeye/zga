@@ -54,7 +54,7 @@ def parse_args():
 		help="Base quality cutoff for short reads, default: 18")
 	reads_args.add_argument("--adapters",
 		help="Adapter sequences for short reads trimming (FASTA). "
-		+ "By default Illumina adapter sequences are used.")
+		+ "By default Illumina and BGI adapter sequences are used.")
 	reads_args.add_argument("--filter-by-tile", action="store_true",
 		help="Filter short reads based on positional quality over a flowcell.")
 	reads_args.add_argument("--min-short-read-length", type=int, default=33,
@@ -342,12 +342,12 @@ def bbduk_process(args, reads, readdir):
 def read_processing(args, reads):
 	logger.info("Reads processing started")
 	readdir = create_subdir(args.output_dir, "reads")
-	illumina_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/illumina.adapters.fasta")
+	sr_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/sr.adapters.fasta")
 
 	if args.adapters and os.path.isfile(args.adapters):
 		args.adapters = os.path.abspath(args.adapters)
 	else:
-		args.adapters = illumina_adapters
+		args.adapters = sr_adapters
 
 	if args.filter_by_tile and "pe" in reads.keys():
 		reads = filter_by_tile(args, reads, readdir)
