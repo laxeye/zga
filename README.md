@@ -1,7 +1,7 @@
 # ZGA - prokaryotic genome assembly and annotation pipeline
 
 [![version status](https://img.shields.io/pypi/v/zga.svg)](https://pypi.python.org/pypi/zga)
-[![Anaconda Cloud](https://anaconda.org/laxeye/zga/badges/installer/conda.svg)](https://anaconda.org/laxeye/zga/)
+[![Anaconda Cloud](https://anaconda.org/bioconda/zga/badges/installer/conda.svg)](https://anaconda.org/bioconda/zga/)
 
 ## Installation
 
@@ -32,12 +32,14 @@ The simplest way to install ZGA and all dependencies is conda:
 `conda config --add channels conda-forge`
 
 3. At the end You should install ZGA to an existing active environment (Python 3.6 or 3.7):  
-`conda install -c laxeye zga`  
+`conda install zga`  
 or create a fresh environment and activate it:  
-`conda create -n zga -c laxeye zga`  
+`conda create -n zga zga`  
 `conda activate zga`
 
-[![Anaconda latest release](https://anaconda.org/laxeye/zga/badges/latest_release_date.svg)](https://anaconda.org/laxeye/zga/)
+[![Anaconda latest release](https://anaconda.org/bioconda/zga/badges/latest_release_date.svg)](https://anaconda.org/bioconda/zga/)
+
+If You have troubles with bioconda channel my personal channel https://anaconda.org/laxeye/zga may serve as a back-up: `conda install -c laxeye zga`
 
 ### Installing dependencies
 
@@ -142,4 +144,4 @@ Cock, P. J., Antao, T., Chang, J. T., Chapman, B. A., Cox, C. J., Dalke, A., ...
 
 O’Connell, J., et al. (2015) NxTrim: optimized trimming of Illumina mate pair reads. Bioinformatics 31(12), 2035-2037.
 
-Ondov, B.D., Treangen, T.J., Melsted, P. et al. Mash: fast genome and metagenome distance estimation using MinHash. Genome Biol 17, 132 (2016). doi: 10.1186/s13059-016-0997-x
+Ondov, B.D., Treangen, T.J., Melsted, P. et al. Mash: fast genome and metagenome distance estimation using MinHash. Genome Biol 17, 132 (2016). https://doi.org/10.1186/s13059-016-0997-x
