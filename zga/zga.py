@@ -8,6 +8,7 @@ import subprocess
 import re
 from Bio import SeqIO
 import hashlib
+import json
 
 
 def parse_args():
@@ -639,18 +640,27 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 
 
 def assemble(args, reads, estimated_genome_size) -> str:
+	'''Returns path to assembled genome'''
 	logger.info("Assembling started")
 	aslydir = os.path.join(args.output_dir, "assembly")
 
 	if args.assembler == "flye":
-		return flye_assemble(args, reads, estimated_genome_size, aslydir)
+		assembly = flye_assemble(args, reads, estimated_genome_size, aslydir)
 	elif args.assembler == "spades":
-		return spades_assemble(args, reads, aslydir)
+		assembly = spades_assemble(args, reads, aslydir)
 	elif args.assembler == "unicycler":
-		return unicycler_assemble(args, reads, aslydir)
+		assembly = unicycler_assemble(args, reads, aslydir)
 	else:
 		logger.critical("Not yet implemented")
 		raise Exception("Unknown option for assembly")
+
+	stats = assembly_stats(assembly)
+	logger.info("Assembly length: %s", stats['Total length'])
+	logger.info("Contig count: %s", stats['Sequence count'])
+	logger.info("N50: %s", stats['N50'])
+	write_assembly_stats(args, stats, prefix=args.assembler, s_format="table")
+
+	return(assembly)
 
 
 def extract_replicons(args, aslydir) -> int:
@@ -759,7 +769,7 @@ def check_phix(args):
 
 
 def run_checkm(args):
-
+	'''Runs CheckM and returns it's output file or None'''
 	checkm_indir = create_subdir(args.output_dir, "checkm_tmp_in")
 	try:
 		shutil.copy(args.genome, checkm_indir)
@@ -818,6 +828,47 @@ def run_checkm(args):
 		return checkm_outfile
 	else:
 		return None
+
+
+def get_N_L_metric(lengths, value=50):
+	'''Returns a tuple containing NX and LX metric'''
+	l_total = sum(lengths)
+	metric = 0.01 * value
+	l_sum = 0
+	for i, x in enumerate(lengths, 1):
+		l_sum += x
+		if l_sum >= l_total * metric:
+			return x, i
+
+
+def assembly_stats(genome):
+	'''Returns a dict containing genome stats'''
+	stats = dict()
+	seq_records = SeqIO.parse(genome, "fasta")
+	lengths = sorted([len(x.seq) for x in seq_records], reverse=True)
+	stats['Sequence count'] = len(lengths)
+	stats['Total length'] = sum(lengths)
+	stats['Max length'] = lengths[0]
+	stats['N50'], stats['L50'] = get_N_L_metric(lengths, 50)
+	stats['N90'], stats['L90'] = get_N_L_metric(lengths, 90)
+	return stats
+
+
+def write_assembly_stats(args, stats, prefix, s_format="human"):
+	ext_dict = {"human": "txt", "json": "json", "table": "tsv"}
+	filename = f"{prefix}.assembly.{ext_dict[s_format]}"
+	with open(os.path.join(args.output_dir, filename), 'w') as dest:
+		if s_format == "human":
+			for k, v in stats.items():
+				print(f"{k}\t{v}", file=dest)
+		if s_format == "json":
+			print(json.dumps(stats), file=dest)
+		if s_format == "table":
+			header = "\t".join(stats.keys())
+			data = "\t".join(list(map(str, stats.values())))
+			print(f"#{header}", file=dest)
+			print(f"{data}", file=dest)
+	return filename
 
 
 def check_last_step(args, step):

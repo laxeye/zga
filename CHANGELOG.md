@@ -1,5 +1,9 @@
 ### ZGA changelog
 
+**0.08**
+
++ Genome assembly stats
+
 **0.0.7**
 
 * FastQC replaced with fastp
