@@ -76,7 +76,7 @@ Your feedback on other OS is welcome!
 
 Run `zga -h` to get a help message.
 
-Examples:
+### Usage examples
 
 Perform all steps: read qc, read trimming and merging, assembly, CheckM assesment with default (bacterial) marker set, DFAST annotation and use 4 CPU threads where possible:
 
@@ -108,7 +108,7 @@ ZGA is in the stage of active development.
 
 Known issues and limitations:
 
-* It's not posible to provide multiple read libraries i.e. two sets of PE reads or two nanopore runs.
+* It's not posible to provide multiple read libraries of same type, i.e. two sets of PE reads or two nanopore runs.
 * Unicycler doesn't use mate-pair reads.
 * It's not possible to install all dependencies with Python 3.8 via conda, please use 3.7 or 3.6.
 

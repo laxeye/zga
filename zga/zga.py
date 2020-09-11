@@ -61,7 +61,7 @@ def parse_args():
 	reads_args.add_argument("--min-short-read-length", type=int, default=33,
 		help="Minimum short read length to keep after quality trimming.")
 	reads_args.add_argument("--bbmerge-extend", type=int,
-		help="Perform read extension by specified length based on k-mers "
+		help="Perform k-mer read extension by specified length "
 		+ "if initial merging wasn't succesfull.")
 	reads_args.add_argument("--bbmerge-extend-kmer", type=int, default=40,
 		help="K-mer length for read extension, default 40.")
@@ -69,10 +69,10 @@ def parse_args():
 		help="Before merging trim bases with phred score less than a specified value.")
 	reads_args.add_argument("--calculate-genome-size", action="store_true",
 		help="Estimate genome size with mash.")
-	reads_args.add_argument("--genome-size-estimation",
-		help="Genome size for Flye assembler, if known.")
+	reads_args.add_argument("--genome-size-estimation", type=int,
+		help="Genome size in bp (no K/M suffix supported) for Flye assembler, if known.")
 	reads_args.add_argument("--mash-kmer-copies", type=int, default=10,
-		help="Minimum copies of each k-mer to inslude in size estimation")
+		help="Minimum copies of each k-mer to include in size estimation")
 	# Mate pair read processing
 	reads_args.add_argument("--use-unknown-mp", action="store_true",
 		help="Include reads that are probably mate pairs (default: only known MP used)")
@@ -84,7 +84,7 @@ def parse_args():
 		help="Disable read correction in SPAdes")
 	# Spades options
 	asly_args.add_argument("--use-scaffolds", action="store_true",
-		help="SPAdes: Use assembled scaffolds.")
+		help="SPAdes: Use assembled scaffolds. Contigs are used by default.")
 	asly_args.add_argument("--spades-k-list",
 		help="SPAdes: List of kmers, comma-separated even numbers e.g. '21,33,55,77'")
 	# Unicycler options
