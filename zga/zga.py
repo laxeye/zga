@@ -60,6 +60,9 @@ def parse_args():
 		help="Filter short reads based on positional quality over a flowcell.")
 	reads_args.add_argument("--min-short-read-length", type=int, default=33,
 		help="Minimum short read length to keep after quality trimming.")
+	reads_args.add_argument("--tadpole-correct", action="store_true",
+		help="Perform error correction of short reads with tadpole.sh from BBtools."
+		+ "SPAdes correction will be disabled.")
 	reads_args.add_argument("--bbmerge-extend", type=int,
 		help="Perform k-mer read extension by specified length "
 		+ "if initial merging wasn't succesfull.")
@@ -133,6 +136,9 @@ def parse_args():
 		bool(args.pe_merged) | bool(args.single_end) | bool(args.mp_1) ) :
 		logger.error("Impossible to run SPAdes without short reads!")
 		raise Exception("Bad parameters.")
+
+	if args.tadpole_correct:
+		args.no_correction == True
 
 	if args.assembler == 'flye':
 
@@ -340,6 +346,46 @@ def bbduk_process(args, reads, readdir):
 	return reads
 
 
+def tadpole_correct(args, reads, readdir):
+	'''Correct short reads with tadpole'''
+	precmd = ["tadpole.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}", "mode=correct"]
+
+	if "pe" in reads.keys():
+		logger.info("Error correction of paired end reads")
+		out_pe1 = os.path.join(readdir, "ecc.pe_1.fq")
+		out_pe2 = os.path.join(readdir, "ecc.pe_2.fq")
+		cmd = precmd + [f"in={reads['pe'][0]}", f"in2={reads['pe'][1]}",
+			f"out={out_pe1}", f"out2={out_pe2}"]
+
+		if run_external(args, cmd).returncode == 0:
+			for f in reads['pe']:
+				if os.path.dirname(f) == readdir and os.path.exists(f):
+					os.remove(f)
+			reads['pe'] = (out_pe1, out_pe2)
+
+	if "single" in reads.keys():
+		logger.info("Error correction of single end reads")
+		out = os.path.join(readdir, "ecc.single.fq")
+		cmd = precmd + [f"in={reads['single']}", f"out={out}"]
+
+		if run_external(args, cmd).returncode == 0:
+			if os.path.dirname(reads['single']) == readdir and os.path.exists(reads['single']):
+				os.remove(reads['single'])
+			reads['single'] = out
+
+	if "merged" in reads.keys():
+		logger.info("Error correction of merged paired-end reads")
+		out = os.path.join(readdir, "ecc.merged.fq")
+		cmd = precmd + [f"in={reads['merged']}", f"out={out}"]
+
+		if run_external(args, cmd).returncode == 0:
+			if os.path.dirname(reads['merged']) == readdir and os.path.exists(reads['merged']):
+				os.remove(reads['merged'])
+			reads['merged'] = out
+
+	return reads
+
+
 def read_processing(args, reads):
 	logger.info("Reads processing started")
 	readdir = create_subdir(args.output_dir, "reads")
@@ -354,6 +400,9 @@ def read_processing(args, reads):
 		reads = filter_by_tile(args, reads, readdir)
 
 	reads = bbduk_process(args, reads, readdir)
+
+	if args.tadpole_correct:
+		reads = tadpole_correct(args, reads, readdir)
 
 	# Merging overlapping paired-end reads
 	if "merged" not in reads.keys() and "pe" in reads.keys():
