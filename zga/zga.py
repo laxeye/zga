@@ -138,7 +138,7 @@ def parse_args():
 		raise Exception("Bad parameters.")
 
 	if args.tadpole_correct:
-		args.no_correction == True
+		args.no_correction = True
 
 	if args.assembler == 'flye':
 
