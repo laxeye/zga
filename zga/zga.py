@@ -62,7 +62,7 @@ def parse_args():
 		help="Minimum short read length to keep after quality trimming.")
 	reads_args.add_argument("--tadpole-correct", action="store_true",
 		help="Perform error correction of short reads with tadpole.sh from BBtools."
-		+ "SPAdes correction will be disabled.")
+		+ "SPAdes correction may be disabled with \"--no-spades-correction\".")
 	reads_args.add_argument("--bbmerge-extend", type=int,
 		help="Perform k-mer read extension by specified length "
 		+ "if initial merging wasn't succesfull.")
@@ -83,8 +83,8 @@ def parse_args():
 	asly_args = parser.add_argument_group(title="Assembly settings")
 	asly_args.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler", "flye"],
 		help="Assembler: unicycler (default; better quality), spades (faster, may use mate-pair reads) or Flye (long reads only).")
-	asly_args.add_argument("--no-correction", action="store_true",
-		help="Disable read correction in SPAdes")
+	asly_args.add_argument("--no-spades-correction", action="store_true",
+		help="Disable short read correction by SPAdes (works for SPAdes and unicycler).")
 	# Spades options
 	asly_args.add_argument("--use-scaffolds", action="store_true",
 		help="SPAdes: Use assembled scaffolds. Contigs are used by default.")
@@ -136,9 +136,6 @@ def parse_args():
 		bool(args.pe_merged) | bool(args.single_end) | bool(args.mp_1) ) :
 		logger.error("Impossible to run SPAdes without short reads!")
 		raise Exception("Bad parameters.")
-
-	if args.tadpole_correct:
-		args.no_correction = True
 
 	if args.assembler == 'flye':
 
@@ -628,7 +625,7 @@ def spades_assemble(args, reads, aslydir) -> str:
 		cmd += ["--nanopore", reads['nanopore']]
 	if 'pacbio' in reads.keys():
 		cmd += ["--pacbio", reads['pacbio']]
-	if args.no_correction:
+	if args.no_spades_correction:
 		cmd += ["--only-assembler"]
 	if args.spades_k_list:
 		cmd += ["-k", args.spades_k_list]
@@ -665,7 +662,7 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 		"--mode", args.unicycler_mode]
 	if 'pe' in reads.keys():
 		cmd += ["-1", reads['pe'][0], "-2", reads['pe'][1]]
-	if args.no_correction:
+	if args.no_spades_correction:
 		cmd += ["--no_correct"]
 	if 'merged' in reads.keys():
 		cmd += ["-s", reads['merged']]

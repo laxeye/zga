@@ -3,6 +3,7 @@
 **0.08**
 
 + Genome assembly stats
++ Read correction with tadpole.sh (from BBmap)
 
 **0.0.7**
 
