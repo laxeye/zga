@@ -3,26 +3,22 @@
 [![version status](https://img.shields.io/pypi/v/zga.svg)](https://pypi.python.org/pypi/zga)
 [![Anaconda Cloud](https://anaconda.org/bioconda/zga/badges/installer/conda.svg)](https://anaconda.org/bioconda/zga/)
 
+## Main Features
+
+* Wide range of supported reads: Illumina, Oxford Nanopore, PacBio, BGI.
+* Short read multi-threaded processing: QC, filtering, trimming, overlapped pairs merging.
+* Assemblies from short reads, long reads or hybrid assembly using modern and powerful assemblers: [SPAdes](http://cab.spbu.ru/software/spades/), [Unicycler](https://github.com/rrwick/Unicycler/) or [Flye](https://github.com/fenderglass/Flye).
+* Quality control of assembly: completeness and contamination assessment with [CheckM](https://github.com/Ecogenomics/CheckM) as well as PhiX detection.
+* Fast annotation of bacterial and archeal genome assemblies with [DFAST](https://github.com/nigyta/dfast_core) .
+* No High Performance Computing needed. The pipeline works on laptop or desktop.
+
 ## Installation
 
-ZGA is written in Python and tested with Python 3.6 and Python 3.7. ZGA uses several software and libraries including:
-
-* [fastp](https://github.com/OpenGene/fastp)
-* [BBmap](https://sourceforge.net/projects/bbmap/)
-* [NxTrim](https://github.com/sequencing/NxTrim)
-* [mash](https://mash.readthedocs.io/en/latest/)
-* [SPAdes](http://cab.spbu.ru/software/spades/) (>= 3.12 to support merged paired-end reads, >= 3.5.0 to support Nanopore reads)
-* [Unicycler](https://github.com/rrwick/Unicycler/)
-* [Flye](https://github.com/fenderglass/Flye) >= 2.6
-* [racon](https://github.com/lbcb-sci/racon)
-* [CheckM](https://github.com/Ecogenomics/CheckM) >= 1.1.0
-* [BioPython](https://biopython.org/)
-* [NCBI BLAST+](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
-* [DFAST](https://github.com/nigyta/dfast_core)
+ZGA is written in Python and tested with Python 3.6 and Python 3.7.
 
 ### Install with conda
 
-The simplest way to install ZGA and all dependencies is conda:
+The simplest way to install ZGA and all dependencies is **conda**:
 
 1. You need to install conda, e.g. [**miniconda**](https://conda.io/en/latest/miniconda.html). Python 3.7 is preferred.
 
@@ -41,11 +37,36 @@ or create a fresh environment and activate it:
 
 If You have troubles with bioconda channel my personal channel https://anaconda.org/laxeye/zga may serve as a back-up: `conda install -c laxeye zga`
 
+### Install from PyPI
+
+Run `pip install zga`. Biopython is the only one dependency installed from PyPI. All other dependencies You should install manually or using **conda** as mentioned above. CheckM is available on **PyPi**, but it's easier to install it using **conda**.
+
+### Get source from Github
+
+You can get ZGA by cloning from the repository with `git clone https://github.com/laxeye/zga.git` or by downloading an archive. After downloading enter the directory `cd zga` and run `python3 setup.py install`.
+
+Don't forget to install dependecies (see bellow).
+
 ### Installing dependencies
+
+ZGA uses several software and libraries including:
+
+* [fastp](https://github.com/OpenGene/fastp)
+* [BBmap](https://sourceforge.net/projects/bbmap/)
+* [NxTrim](https://github.com/sequencing/NxTrim)
+* [mash](https://mash.readthedocs.io/en/latest/)
+* [SPAdes](http://cab.spbu.ru/software/spades/) (>= 3.12 to support merged paired-end reads, >= 3.5.0 to support Nanopore reads)
+* [Unicycler](https://github.com/rrwick/Unicycler/)
+* [Flye](https://github.com/fenderglass/Flye) >= 2.6
+* [racon](https://github.com/lbcb-sci/racon)
+* [CheckM](https://github.com/Ecogenomics/CheckM) >= 1.1.0
+* [BioPython](https://biopython.org/) <= 1.77 (In 1.78 Bio.Alphabet was removed)
+* [NCBI BLAST+](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
+* [DFAST](https://github.com/nigyta/dfast_core)
 
 You may install all dependencies separately using **conda**. It's highly recommended to create a new conda environment:
 
-`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye racon "samtools>=1.9"`
+`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast "biopython<=1.77" nxtrim "mash>=2" flye racon "samtools>=1.9"`
 
 and activate it
 
@@ -53,22 +74,19 @@ and activate it
 
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye racon "samtools>=1.9"`
+`conda install "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast "biopython<=1.77" nxtrim "mash>=2" flye racon "samtools>=1.9"`
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
-### Install from PyPI
+### DFAST database download
 
-Run `pip install zga`. Biopython is the only one dependency installed from PyPI. All other dependencies You should install manually or using **conda** as mentioned above. CheckM is available on **PyPi**, but it's easier to install it using **conda**.
+After installation DFAST downloads some basic databases. It's recommended to download more databases using *dfast_file_downloader.py* command-line script:
 
-### Get source from Github
-
-You can get ZGA by cloning from the repository with `git clone https://github.com/laxeye/zga.git` or by downloading an archive.
-After downloading enter the directory `cd zga` and run `python3 setup.py install`.
+Run `dfast_file_downloader.py -h` to see available databases and options.
 
 ### Operating systems requirements
 
-ZGA was tested on Ubuntu 18.04 and 19.10. Most probably any modern 64-bit Linux distribuition is enough.
+ZGA was tested on Ubuntu 18.04, 19.10 and 20.04. Most probably any modern 64-bit Linux distribuition is suitable.
 
 Your feedback on other OS is welcome!
 
@@ -86,6 +104,11 @@ Assemble with SPAdes using paired-end and nanopore reads of archaeal genome (Che
 
 `zga -1 R1.fastq.gz -2 R2.fastq.gz --nanopore MiniION.fastq.gz -a spades --threads 4 --memory-limit 16 --domain archaea -o my_assembly`
 
+*(New in 0.8 development releases)* Short read correction with SPAdes is a computationally expensive step, You may run read-correction with tadpole including 
+`--tadpole-correct` option which is much faster and needs less memory.
+
+`zga --tadpole-correct -1 R1.fastq.gz -2 R2.fastq.gz --threads 4 -o my_assembly`
+
 Assemble long reads with Flye skipping long read polishing and perfom short-read polishing with racon:
 
 `zga -1 R1.fastq.gz -2 R2.fastq.gz --nanopore MiniION.fastq.gz -a flye --threads 4 --domain archaea -o my_assembly --flye-short-polish --flye-skip-long-polish`
@@ -94,7 +117,7 @@ Assemble from Nanopore reads using unicycler:
 
 `zga -a unicycler --nanopore MiniION.fastq -o nanopore_assembly`
 
-Perform assesment and annotation of genome assembly with 'Pectobacterium' CheckM marker set:
+Perform assesment and annotation of genome assembly with *Pectobacterium* CheckM marker set:
 
 `zga --first-step check_genome -g pectobacterium_sp.fasta --checkm_rank genus --checkm_taxon Pectobacterium -o my_output_dir`
 
