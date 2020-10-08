@@ -37,17 +37,27 @@ def parse_args():
 
 	# Input
 	input_args = parser.add_argument_group(title="Input files and options",
-		description="Sequencing reads should be in FASTQ format and may be GZipped.")
-	input_args.add_argument("-1", "--pe-1", help="FASTQ file with first (left) paired-end reads")
-	input_args.add_argument("-2", "--pe-2", help="FASTQ file with second (right) paired-end reads")
-	input_args.add_argument("--pe-merged", help="FASTQ file  with merged overlapped paired-end reads")
-	input_args.add_argument("-S", "--single-end", help="FASTQ file with unpaired or single-end reads")
-	input_args.add_argument("--mp-1", help="Mate pair forward reads. SPAdes only")
-	input_args.add_argument("--mp-2", help="Mate pair forward reads. SPAdes only")
-	# parser.add_argument("--pe-interleaved", help="Pair-end interleaved reads")
-	# parser.add_argument("--mp-interleaved", help="Mate pair interleaved reads")
-	input_args.add_argument("--pacbio", help="PacBio reads")
-	input_args.add_argument("--nanopore", help="Nanopore reads")
+		description="Sequencing reads should be in FASTQ format and may be GZipped. "
+		+ "Multiple libraries should be provided as space-separated list. "
+		+ "If some type of short reads are partialyy available use n/a. "
+		+ "e.g. -1 Monday.R1.fq Friday.R1.fq -2 Monday.R2.fq Friday.R2.fq "
+		+ "--pe-merged n/a Friday.merged.fq")
+	input_args.add_argument("-1", "--pe-1", nargs='+',
+		help="FASTQ file(s) with first (left) paired-end reads. Space-separated if multiple.")
+	input_args.add_argument("-2", "--pe-2", nargs='+',
+		help="FASTQ file(s) with second (right) paired-end reads. Space-separated if multiple.")
+	input_args.add_argument("--pe-merged", nargs='+',
+		help="FASTQ file(s) with merged overlapped paired-end reads")
+	input_args.add_argument("-S", "--single-end", nargs='+',
+		help="FASTQ file(s) with unpaired or single-end reads")
+	input_args.add_argument("--mp-1", nargs='+',
+		help="Mate pair forward reads. SPAdes only")
+	input_args.add_argument("--mp-2", nargs='+',
+		help="Mate pair forward reads. SPAdes only")
+	input_args.add_argument("--pacbio", nargs='+',
+		help="PacBio reads. Space-separated if multiple.")
+	input_args.add_argument("--nanopore", nargs='+',
+		help="Nanopore reads. Space-separated if multiple.")
 
 	# Read processing
 	reads_args = parser.add_argument_group(title="Read processing settings")
@@ -60,6 +70,9 @@ def parse_args():
 		help="Filter short reads based on positional quality over a flowcell.")
 	reads_args.add_argument("--min-short-read-length", type=int, default=33,
 		help="Minimum short read length to keep after quality trimming.")
+	reads_args.add_argument("--entropy-cutoff", type=float, default=-1,
+		help="Set between 0 and 1 to filter reads with entropy below "
+		+ "that value. Higher is more stringent. Default = -1, filtering disabled.")
 	reads_args.add_argument("--tadpole-correct", action="store_true",
 		help="Perform error correction of short reads with tadpole.sh from BBtools."
 		+ "SPAdes correction may be disabled with \"--no-spades-correction\".")
@@ -160,45 +173,66 @@ def parse_args():
 def check_reads(args):
 	'''Check reads provided by user.
 
-	Parameters:
-	args (argparse.Namespase).
-
 	Returns:
-	reads (dict) : paths to all existing reads.
+	reads (list(dict)) : paths to all existing reads.
 	'''
-	reads = {}
+	libraries = []
 	read_list = [args.pe_1, args.pe_2, args.single_end, args.pe_merged,
 	args.mp_1, args.mp_2, args.pacbio, args.nanopore]
+	read_list = list(filter(None.__ne__, read_list))
 
 	logger.info("Checking input files.")
 
-	for f in read_list:
-		if f and not os.path.isfile(f):
-			logger.error("File %s doesn't exist", f)
-			raise FileNotFoundError("File %s doesn't exist" % f)
+	for reads in read_list:
+		for f in reads:
+			if f != "n/a" and not os.path.isfile(f):
+				logger.error("File %s doesn't exist", f)
+				raise FileNotFoundError("File %s doesn't exist" % f)
 
+	short_libs={}
 	if args.pe_1 and args.pe_2:
-		reads['pe'] = (os.path.abspath(args.pe_1), os.path.abspath(args.pe_2))
-	elif args.pe_1 or args.pe_2:
-		logger.error("Single end reads provided as paired. Please use \"--single-end\" option")
-		sys.exit(1)
+		short_libs["forward"] = args.pe_1
+		short_libs["reverse"] = args.pe_2
+	if args.single_end:
+		short_libs["single"] = args.single_end
+	if args.pe_merged:
+		short_libs["merged"] = args.pe_merged
+
+	if len(short_libs.values()) > 0:
+		short_lib_N = max(list(map(len, short_libs.values())))
+		for i in range(short_lib_N):
+			libraries.append({"type": "short"})
+			for lib_type, lib in short_libs.items():
+				if len(lib) > i and lib[i] != "n/a":
+					libraries[i][lib_type] = os.path.abspath(lib[i])
 
 	if args.mp_1 and args.mp_2:
-		reads['mp'] = (os.path.abspath(args.mp_1), os.path.abspath(args.mp_2))
-
-	if args.pe_merged:
-		reads['merged'] = os.path.abspath(args.pe_merged)
-
-	if args.single_end:
-		reads['single'] = os.path.abspath(args.single_end)
+		for pair in list(zip(args.mp_1, args.mp_2)):
+			libraries.append({
+				"type": "mate-pair",
+				"forward": os.path.abspath(pair[0]),
+				"reverse": os.path.abspath(pair[1])
+				})
 
 	if args.pacbio:
-		reads['pacbio'] = os.path.abspath(args.pacbio)
+		for lib in args.pacbio:
+			libraries.append({
+				"type": "pacbio",
+				"single": os.path.abspath(lib)
+			})
 
 	if args.nanopore:
-		reads['nanopore'] = os.path.abspath(args.nanopore)
+		for lib in args.nanopore:
+			libraries.append({
+				"type": "nanopore",
+				"single": os.path.abspath(lib)
+			})
 
-	return reads
+	if len(libraries) == 0:
+		logger.critical("No reads provided for genome assembly")
+		raise Exception("No reads provided for genome assembly")
+
+	return libraries
 
 
 def create_subdir(parent, child) -> str:
@@ -237,30 +271,36 @@ def read_qc(args, reads):
 	logger.info("Read quality control started")
 	qcoutdir = create_subdir(args.output_dir, "readQC")
 	precmd = ["fastp", "-L", "-Q", "-G", "-A", "-z", "1", "--stdout", "-w", str(args.threads)]
-	for r in reads.values():
-		if isinstance(r, (list, tuple)):
-			prefix = os.path.join(qcoutdir,os.path.split(r[0])[-1])
-			cmd = precmd + ["-i", r[0], "-I", r[1]]
-		else:
+	for lib in reads:
+		for t, r in lib.items():
+			if t == "type":
+				continue
 			prefix = os.path.join(qcoutdir,os.path.split(r)[-1])
-			cmd = precmd + ["-i", r]
-		cmd += ["-h", f"{prefix}.html", "-j", f"{prefix}.json"]
-		logger.debug("QC of %s", r)
-		run_external(args, cmd)
+			cmd = precmd + ["-i", r, "-h", f"{prefix}.html", "-j", f"{prefix}.json"]
+			logger.debug("QC of %s", r)
+			run_external(args, cmd)
+
+
+def remove_intermediate(path, *files):
+	for f in files:
+		if os.path.dirname(f) == path and os.path.exists(f):
+			logger.debug("Removing %s", f)
+			os.remove(f)
 
 
 def filter_by_tile(args, reads, readdir):
-	filtered_pe_r1 = os.path.join(readdir, "filtered_pe_r1.fq.gz")
-	filtered_pe_r2 = os.path.join(readdir, "filtered_pe_r2.fq.gz")
+	for index, lib in enumerate(reads, start=1):
+		if lib["type"] == "short" and "forward" in lib.keys() and "reverse" in lib.keys():
+			initial = (lib['forward'], (lib['reverse']))
+			filtered_pe_r1 = os.path.join(readdir, f"lib{index}.filtered.r1.fq.gz")
+			filtered_pe_r2 = os.path.join(readdir, f"lib{index}.filtered.r2.fq.gz")
 
-	cmd = ["filterbytile.sh", f"in={reads['pe'][0]}", f"in2={reads['pe'][1]}",
-	f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}"]
+			cmd = ["filterbytile.sh", f"in={initial[0]}", f"in2={initial[1]}",
+			f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}"]
 
-	if run_external(args, cmd).returncode == 0:
-		for f in reads['pe']:
-			if os.path.dirname(f) == readdir and os.path.exists(f):
-				os.remove(f)
-		reads['pe'] = (filtered_pe_r1, filtered_pe_r2)
+			if run_external(args, cmd).returncode == 0:
+				remove_intermediate(readdir, *initial)
+				lib['forward'], lib['reverse'] = filtered_pe_r1, filtered_pe_r2
 
 	return reads
 
@@ -276,69 +316,76 @@ def merge_bb(args, reads, readdir):
 	Retruns:
 	reads (dict) : modified if bbmerge returns 0.
 	'''
-	notmerged_r1 = os.path.join(readdir, "nm.pe_1.fq.gz")
-	notmerged_r2 = os.path.join(readdir, "nm.pe_2.fq.gz")
-	merged = os.path.join(readdir, "merged.fq.gz")
-	cmd = ["bbmerge.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}",
-		f"in1={reads['pe'][0]}", f"in2={reads['pe'][1]}",
-		f"outu1={notmerged_r1}", f"outu2={notmerged_r2}", f"out={merged}"]
-	if args.bbmerge_extend:
-		cmd += [f"extend2={args.bbmerge_extend}",
-		f"k={args.bbmerge_extend_kmer}", "rsem=t"]
-	if args.bbmerge_trim:
-		cmd += ["qtrim2=t", f"trimq={args.bbmerge_trim}"]
-	logger.info("Merging paired-end reads.")
+	for index, lib in enumerate(reads, start=1):
+		if (lib["type"] == "short"
+				and "forward" in lib.keys()
+				and "reverse" in lib.keys()
+				and "merged" not in lib.keys()
+				):
+			# Initial, unmerged and merged filenames
+			initial = (lib['forward'], (lib['reverse']))
+			u1 = os.path.join(readdir, f"lib{index}.u1.fq.gz")
+			u2 = os.path.join(readdir, f"lib{index}.u2.fq.gz")
+			merged = os.path.join(readdir, f"lib{index}.merged.fq.gz")
 
-	if run_external(args, cmd).returncode == 0:
-		for f in reads['pe']:
-			if os.path.dirname(f) == readdir and os.path.exists(f):
-				os.remove(f)
-		reads['merged'] = merged
-		reads['pe'] = (notmerged_r1, notmerged_r2)
+			cmd = ["bbmerge.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}",
+			f"in={initial[0]}", f"in2={initial[1]}",
+			f"outu1={u1}", f"outu2={u2}", f"out={merged}"]
+
+			if args.bbmerge_extend:
+				cmd += [f"extend2={args.bbmerge_extend}",
+				f"k={args.bbmerge_extend_kmer}", "rsem=t"]
+			else:
+				cmd.append("strict=t")
+
+			if args.bbmerge_trim:
+				cmd += ["qtrim2=t", f"trimq={args.bbmerge_trim}"]
+			logger.info("Merging paired-end reads.")
+
+			if run_external(args, cmd).returncode == 0:
+				remove_intermediate(readdir, *initial)
+				lib['forward'], lib['reverse'] = u1, u2
+				lib['merged'] = merged
+
 
 	return reads
 
 
 def bbduk_process(args, reads, readdir):
+	"""Perform trimming and filtering of short reads"""
 	bbduk_kmer = 19  # K-mer length for contaminant/adapter removal
 	precmd = ["bbduk.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}",
 			f"ref={args.adapters}", f"k={bbduk_kmer}", "ktrim=r",
-			"qtrim=r", f"trimq={args.quality_cutoff}", "entropy=0.1",
+			"qtrim=r", f"trimq={args.quality_cutoff}", f"entropy={args.entropy_cutoff}",
 			f"minlength={args.min_short_read_length}"]
 
-	if "pe" in reads.keys():
-		logger.info("Trimming and filtering paired end reads")
-		out_pe1 = os.path.join(readdir, "pe_1.fq")
-		out_pe2 = os.path.join(readdir, "pe_2.fq")
-		out_stats = os.path.join(readdir, "bbduk.stats.pe.txt")
-		cmd = precmd + [f"in={reads['pe'][0]}", f"in2={reads['pe'][1]}",
-			f"out={out_pe1}", f"out2={out_pe2}", f"stats={out_stats}"]
+	for index, lib in enumerate([lib for lib in reads if lib["type"] == "short"], start=1):
 
-		if run_external(args, cmd).returncode == 0:
-			for f in reads['pe']:
-				if os.path.dirname(f) == readdir and os.path.exists(f):
-					os.remove(f)
-			reads['pe'] = (out_pe1, out_pe2)
+		if "forward" in lib.keys() and "reverse" in lib.keys():
+			logger.info("Trimming and filtering paired end reads")
+			initial = (lib['forward'], (lib['reverse']))
+			out_pe1 = os.path.join(readdir, f"lib{index}.r1.fq")
+			out_pe2 = os.path.join(readdir, f"lib{index}.r2.fq")
+			out_stats = os.path.join(readdir, f"lib{index}.bbduk.pe.txt")
+			cmd = precmd + [f"in={initial[0]}", f"in2={initial[1]}",
+				f"out={out_pe1}", f"out2={out_pe2}", f"stats={out_stats}"]
 
-	if "single" in reads.keys():
-		logger.info("Trimming and filtering single end reads")
-		out = os.path.join(readdir, "single.fq")
-		out_stats = os.path.join(readdir, "bbduk.stats.se.txt")
-		cmd = precmd + [f"in={reads['single']}", f"out={out}",
-			f"stats={out_stats}"]
+			if run_external(args, cmd).returncode == 0:
+				remove_intermediate(readdir, *initial)
+				lib['forward'], lib['reverse'] = out_pe1, out_pe2
 
-		if run_external(args, cmd).returncode == 0:
-			reads['single'] = out
+		for lib_type in ["single", "merged"]:
+			if lib_type in lib.keys():
+				logger.info(f"Trimming and filtering {lib_type} reads")
+				initial = lib[lib_type]
+				out = os.path.join(readdir, f"lib{index}.{lib_type}.fq")
+				out_stats = os.path.join(readdir, f"lib{index}.bbduk.{lib_type}.txt")
+				cmd = precmd + [f"in={initial}", f"out={out}",
+					f"stats={out_stats}"]
 
-	if "merged" in reads.keys():
-		logger.info("Trimming and filtering merged paired-end reads")
-		out = os.path.join(readdir, "merged.fq")
-		out_stats = os.path.join(readdir, "bbduk.stats.merged.txt")
-		cmd = precmd + [f"in={reads['merged']}", f"out={out}",
-			f"stats={out_stats}"]
-
-		if run_external(args, cmd).returncode == 0:
-			reads['merged'] = out
+				if run_external(args, cmd).returncode == 0:
+					remove_intermediate(readdir, initial)
+					lib[lib_type] = out
 
 	return reads
 
@@ -347,38 +394,29 @@ def tadpole_correct(args, reads, readdir):
 	'''Correct short reads with tadpole'''
 	precmd = ["tadpole.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}", "mode=correct"]
 
-	if "pe" in reads.keys():
-		logger.info("Error correction of paired end reads")
-		out_pe1 = os.path.join(readdir, "ecc.pe_1.fq")
-		out_pe2 = os.path.join(readdir, "ecc.pe_2.fq")
-		cmd = precmd + [f"in={reads['pe'][0]}", f"in2={reads['pe'][1]}",
-			f"out={out_pe1}", f"out2={out_pe2}"]
+	for index, lib in enumerate([lib for lib in reads if lib["type"] == "short"], start=1):
+		if "forward" in lib.keys() and "reverse" in lib.keys():
+			logger.info("Error correction of paired end reads")
+			initial = (lib['forward'], (lib['reverse']))
+			out_pe1 = os.path.join(readdir, f"lib{index}.ecc.pe.r1.fq")
+			out_pe2 = os.path.join(readdir, f"lib{index}.ecc.pe.r2.fq")
+			cmd = precmd + [f"in={initial[0]}", f"in2={initial[1]}",
+				f"out={out_pe1}", f"out2={out_pe2}"]
 
-		if run_external(args, cmd).returncode == 0:
-			for f in reads['pe']:
-				if os.path.dirname(f) == readdir and os.path.exists(f):
-					os.remove(f)
-			reads['pe'] = (out_pe1, out_pe2)
+			if run_external(args, cmd).returncode == 0:
+				remove_intermediate(readdir, *initial)
+				lib['forward'], lib['reverse'] = out_pe1, out_pe2
 
-	if "single" in reads.keys():
-		logger.info("Error correction of single end reads")
-		out = os.path.join(readdir, "ecc.single.fq")
-		cmd = precmd + [f"in={reads['single']}", f"out={out}"]
+		for lib_type in ["single", "merged"]:
+			if lib_type in lib.keys():
+				logger.info(f"Error correction of {lib_type} reads")
+				initial = lib[lib_type]
+				out = os.path.join(readdir, f"lib{index}.ecc.{lib_type}.fq")
+				cmd = precmd + [f"in={initial}", f"out={out}"]
 
-		if run_external(args, cmd).returncode == 0:
-			if os.path.dirname(reads['single']) == readdir and os.path.exists(reads['single']):
-				os.remove(reads['single'])
-			reads['single'] = out
-
-	if "merged" in reads.keys():
-		logger.info("Error correction of merged paired-end reads")
-		out = os.path.join(readdir, "ecc.merged.fq")
-		cmd = precmd + [f"in={reads['merged']}", f"out={out}"]
-
-		if run_external(args, cmd).returncode == 0:
-			if os.path.dirname(reads['merged']) == readdir and os.path.exists(reads['merged']):
-				os.remove(reads['merged'])
-			reads['merged'] = out
+				if run_external(args, cmd).returncode == 0:
+					remove_intermediate(readdir, initial)
+					lib[lib_type] = out
 
 	return reads
 
@@ -393,7 +431,7 @@ def read_processing(args, reads):
 	else:
 		args.adapters = sr_adapters
 
-	if args.filter_by_tile and "pe" in reads.keys():
+	if args.filter_by_tile:
 		reads = filter_by_tile(args, reads, readdir)
 
 	reads = bbduk_process(args, reads, readdir)
@@ -402,12 +440,10 @@ def read_processing(args, reads):
 		reads = tadpole_correct(args, reads, readdir)
 
 	# Merging overlapping paired-end reads
-	if "merged" not in reads.keys() and "pe" in reads.keys():
-		reads = merge_bb(args, reads, readdir)
+	reads = merge_bb(args, reads, readdir)
 
 	# Processing Illumina mate-pairs
-	if "mp" in reads.keys():
-		reads = mp_read_processing(args, reads, readdir)
+	reads = mp_read_processing(args, reads, readdir)
 
 	logger.info("Read processing finished")
 
@@ -431,10 +467,10 @@ def mash_estimate(args, reads):
 	'''
 	reads_to_sketch = []
 
-	for readfile in reads.values():
-		if isinstance( readfile, (list, tuple) ):
-			reads_to_sketch += list(readfile)
-		else:
+	for library in reads:
+		if library['type'] == "mate-pair":
+			continue
+		for readfile in [v for k, v in library.items() if k != "type"]:
 			reads_to_sketch.append(readfile)
 
 	if len(reads_to_sketch) == 0:
@@ -461,26 +497,30 @@ def mash_estimate(args, reads):
 
 def mp_read_processing(args, reads, readdir):
 	'''Filtering Illumina mate pair reads'''
-	prefix = os.path.join(readdir, "nxtrim")
+	for index, lib in enumerate([lib for lib in reads if lib["type"] == "mate-pair"], start=1):
+		prefix = os.path.join(readdir, f"mate.{index}")
 
-	cmd = ["nxtrim", "-1", reads['mp'][0], "-2", reads['mp'][1], "--separate"]
-	cmd += ["--justmp", "-O", prefix, "-l", str(args.min_short_read_length)]
-	logger.info("Processing mate-pair reads.")
-	if run_external(args, cmd).returncode == 0:
-		if args.use_unknown_mp:
-			with open(f"{prefix}_R1.all.fastq.gz", "wb") as dest:
-				with open(f"{prefix}_R1.mp.fastq.gz", "rb") as src:
-					shutil.copyfileobj(src, dest)
-				with open(f"{prefix}_R1.unknown.fastq.gz", "rb") as src:
-					shutil.copyfileobj(src, dest)
-			with open(f"{prefix}_R2.all.fastq.gz", "wb") as dest:
-				with open(f"{prefix}_R2.mp.fastq.gz", "rb") as src:
-					shutil.copyfileobj(src, dest)
-				with open(f"{prefix}_R2.unknown.fastq.gz", "rb") as src:
-					shutil.copyfileobj(src, dest)
-			reads['mp'] = (f"{prefix}_R1.all.fastq.gz", f"{prefix}_R2.all.fastq.gz")
-		else:
-			reads['mp'] = (f"{prefix}_R1.mp.fastq.gz", f"{prefix}_R2.mp.fastq.gz")
+		cmd = [
+			"nxtrim", "-1", lib['forward'], "-2", lib['reverse'],
+			"--separate", "--rf", "--justmp", "-O", prefix, "-l",
+			str(args.min_short_read_length)
+			]
+		logger.info("Processing mate-pair reads.")
+		if run_external(args, cmd).returncode == 0:
+			if args.use_unknown_mp:
+				with open(f"{prefix}_R1.all.fastq.gz", "wb") as dest:
+					with open(f"{prefix}_R1.mp.fastq.gz", "rb") as src:
+						shutil.copyfileobj(src, dest)
+					with open(f"{prefix}_R1.unknown.fastq.gz", "rb") as src:
+						shutil.copyfileobj(src, dest)
+				with open(f"{prefix}_R2.all.fastq.gz", "wb") as dest:
+					with open(f"{prefix}_R2.mp.fastq.gz", "rb") as src:
+						shutil.copyfileobj(src, dest)
+					with open(f"{prefix}_R2.unknown.fastq.gz", "rb") as src:
+						shutil.copyfileobj(src, dest)
+				lib['forward'], lib['reverse'] = (f"{prefix}_R1.all.fastq.gz", f"{prefix}_R2.all.fastq.gz")
+			else:
+				lib['forward'], lib['reverse'] = (f"{prefix}_R1.mp.fastq.gz", f"{prefix}_R2.mp.fastq.gz")
 
 	return reads
 
@@ -517,10 +557,8 @@ def racon_polish(args, assembly, reads) -> str:
 	if not os.path.isdir(polish_dir):
 		polish_dir = create_subdir(args.output_dir, "polishing")
 	target = os.path.join(polish_dir, "mapping.sam")
-	for readfile in reads:
-		if isinstance(readfile, (list, tuple)):
-			assembly = racon_polish(args, assembly, readfile)
-		else:
+	for library in [x for x in reads if x['type'] == "short"]:
+		for readfile in [x for x in library.values() if x != "short"]:
 			logger.debug("Racon genome polishing with: %s", readfile)
 			mapping = map_short_reads(args, assembly, readfile, target)
 			if mapping:
@@ -556,11 +594,20 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
 		sys.exit(1)
 
 	cmd = ["flye", "-o", aslydir, "-g", str(estimated_genome_size), "-t", str(args.threads)]
-	if "nanopore" in reads.keys():
-		cmd += ["--nano-raw", reads['nanopore']]
-	elif "pacbio" in reads.keys():
-		cmd += ["--pacbio-raw", reads['pacbio']]
 
+	types = [x["type"] for x in reads]
+	if "nanopore" in types:
+		long_reads = "nanopore"
+		flye_key = "--nano-raw"
+	elif "pacbio" in types:
+		long_reads = "pacbio"
+		flye_key = "--pacbio-raw"
+	else:
+		raise Exception("No long reads provided for Flye")
+
+	reads = [x['single'] for x in reads if x['type'] == long_reads]
+	cmd += [flye_key, *reads]
+	
 	if args.flye_skip_long_polish:
 		cmd += ["--stop-after", "contigger"]
 
@@ -596,7 +643,7 @@ def spades_assemble(args, reads, aslydir) -> str:
 	assembly (str) : path to genome assembly
 	'''
 	cmd = ["spades.py", "-o", aslydir, "--careful", "-t", str(args.threads),
-		"--cov-cutoff", "auto"]
+		"--cov-cutoff", "auto", "-m", str(args.memory_limit)]
 
 	spades_version = get_spades_version()
 	logger.debug("SPAdes version: %s", spades_version)
@@ -611,20 +658,21 @@ def spades_assemble(args, reads, aslydir) -> str:
 		cmd += ['--careful']
 	'''
 
-	if args.memory_limit:
-		cmd += ["-m", str(args.memory_limit)]
-	if 'pe' in reads.keys():
-		cmd += ["-1", reads['pe'][0], "-2", reads['pe'][1]]
-	if 'merged' in reads.keys():
-		cmd += ["--merged", reads['merged']]
-	if 'single' in reads.keys():
-		cmd += ["-s", reads['single']]
-	if 'mp' in reads.keys():
-		cmd += ["--mp1-1", reads['mp'][0], "--mp1-2", reads['mp'][1]]
-	if 'nanopore' in reads.keys():
-		cmd += ["--nanopore", reads['nanopore']]
-	if 'pacbio' in reads.keys():
-		cmd += ["--pacbio", reads['pacbio']]
+	for index, lib in enumerate(reads, start=1):
+		if lib['type'] == "short":
+			if "forward" in lib.keys() and "reverse" in lib.keys():
+				cmd += [f"--pe{index}-1", lib['forward'], f"--pe{index}-2", lib['reverse']]
+			if "merged" in lib.keys():
+				cmd += [f"--pe{index}-m", lib['merged']]
+			if "single" in lib.keys():
+				cmd += [f"--pe{index}-s", lib['single']]
+		if lib['type'] == 'mate-pair':
+			cmd += [f"--mp{index}-1", lib['forward'], f"--mp{index}-2", lib['reverse']]
+		if lib['type'] == 'nanopore':
+			cmd += ["--nanopore", reads['nanopore']]
+		if lib['type'] == 'pacbio':
+			cmd += ["--pacbio", reads['pacbio']]
+
 	if args.no_spades_correction:
 		cmd += ["--only-assembler"]
 	if args.spades_k_list:
@@ -660,18 +708,25 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 
 	cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads),
 		"--mode", args.unicycler_mode]
-	if 'pe' in reads.keys():
-		cmd += ["-1", reads['pe'][0], "-2", reads['pe'][1]]
+	for index, lib in enumerate(reads, start=1):
+		sr_parsed = False
+		if lib['type'] == "short":
+			if sr_parsed:
+				continue
+			if "forward" in lib.keys() and "reverse" in lib.keys():
+				cmd += ["-1", lib['forward'], "-2", lib['reverse']]
+			if "merged" in lib.keys():
+				cmd += [f"-s", lib['merged']]
+			elif "single" in lib.keys():
+				cmd += [f"-s", lib['single']]
+			sr_parsed = True
+		if lib['type'] == 'nanopore':
+			cmd += ["-l", lib['single']]
+		if lib['type'] == 'pacbio':
+			cmd += ["-l", lib['single']]
+
 	if args.no_spades_correction:
 		cmd += ["--no_correct"]
-	if 'merged' in reads.keys():
-		cmd += ["-s", reads['merged']]
-	elif 'single' in reads.keys():
-		cmd += ["-s", reads['single']]
-	if 'nanopore' in reads.keys():
-		cmd += ["-l", reads['nanopore']]
-	if 'pacbio' in reads.keys():
-		cmd += ["-l", reads['pacbio']]
 
 	if run_external(args, cmd).returncode != 0:
 		logger.error("Genome assembly finished with errors.")
@@ -963,11 +1018,6 @@ def main():
 	if args.first_step <= 4:
 		reads = check_reads(args)
 		logger.debug("Input reads: %s", reads)
-		if len(list(reads)) == 0:
-			logger.critical("No reads provided for genome assembly")
-			raise Exception("No reads provided for genome assembly")
-		short_reads_keys = {'pe', 'merged', 'single'}
-		short_reads_list = [ reads[k] for k in list(set(reads.keys()) & short_reads_keys) ]
 
 	if args.first_step > 3 and (not args.genome or not os.path.isfile(args.genome)):
 		logger.error("Genome assembly is not provided")
@@ -995,6 +1045,7 @@ def main():
 
 	# Short read polishing is only meaningful for flye assembly
 	if args.first_step <= 4 and args.perform_polishing:
+		short_reads_list = [lib for lib in reads if lib['type'] == "short"]
 		if len(short_reads_list) > 0:
 			for x in range(args.polishing_iterations):
 				logger.info("Performing genome polishing. Iteration %s.", x)
