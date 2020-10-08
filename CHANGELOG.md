@@ -1,9 +1,10 @@
 ### ZGA changelog
 
-**0.08**
+**0.0.8**
 
 + Genome assembly stats
 + Read correction with tadpole.sh (from BBmap)
++ Multiple libraries of the same type supported for SPAdes and Flye
 
 **0.0.7**
 

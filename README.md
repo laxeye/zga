@@ -18,6 +18,8 @@ ZGA is written in Python and tested with Python 3.6 and Python 3.7.
 
 ### Install with conda
 
+[![Anaconda latest release](https://anaconda.org/bioconda/zga/badges/latest_release_date.svg)](https://anaconda.org/bioconda/zga/)
+
 The simplest way to install ZGA and all dependencies is **conda**:
 
 1. You need to install conda, e.g. [**miniconda**](https://conda.io/en/latest/miniconda.html). Python 3.7 is preferred.
@@ -33,9 +35,7 @@ or create a fresh environment and activate it:
 `conda create -n zga zga`  
 `conda activate zga`
 
-[![Anaconda latest release](https://anaconda.org/bioconda/zga/badges/latest_release_date.svg)](https://anaconda.org/bioconda/zga/)
-
-If You have troubles with bioconda channel my personal channel https://anaconda.org/laxeye/zga may serve as a back-up: `conda install -c laxeye zga`
+If You have troubles with bioconda channel try to use my personal channel https://anaconda.org/laxeye/zga `conda install -c laxeye zga`
 
 ### Install from PyPI
 
@@ -93,6 +93,42 @@ Your feedback on other OS is welcome!
 ## Usage
 
 Run `zga -h` to get a help message.
+
+### Pipeleine steps
+
+ZGA includes several steps:
+
+1. Read quality check ('readqc')
+2. Read processing ('preprocessing')
+3. Genome assembling ('assembling')
+4. Genome polishing ('polishing')
+5. Genome quality assessment ('check_genome')
+6. Genome annotation ('annotation')
+
+You may start from any step and finish at any step providing arguments `-s` or `--first-step` and `-l` or `--last-step` followed by step designation (in brackets in the list above).
+
+E.g. if You like to perform read processing, genome assembling and genome polishing You should run
+
+`zga --first-step preprocessing --last-step polishing ...`
+
+### Input files
+
+ZGA may use unprocessed or processed sequencing reads from different platforms as well as genome assemblies to perform assembly polishing, assembly quality assessment and assembly annotation. FASTQ format gzipped or not is required for sequencing reads. Paired-end reads shoul be provided in separate files, not interleaved. Sequencing reads should be provided as space separated list after corresponding argument:
+
+`-1` or `--pe-1` for forward paired-end reads (Illumina, BGI)  
+`-2` or `--pe-2` for reverse paired-end reads  
+`-S` or `--single-end` for unpaired short reads  
+`--pe-merged` for merged overlapping paired-end reads (if You performed merging earlier)  
+`--mp-1` for first mate-pair reads, RF orientation is supposed  
+`--mp-2` for second mate-pair reads  
+`--pacbio` for PacBio single-end sequencing reads  
+`--nanopore` for Oxford Nanopore sequencing reads  
+
+#### Examples
+
+`zga -1 Raw.R1.fq.gz -2 Raw.R2.fq.gz` unprocessed paired-end reads  
+`zga -1 Unmerged_1.fq -2 Unmerged_2.fq --pe-merged Merged.fq` reads after processing (overlapping reads merging)  
+`zga -1 Lib1.R1.fq.gz Lib2.R1.fq -2 Lib1.R2.fq Lib2.R2.fq` combination of reads from two sequencing libraries  
 
 ### Usage examples
 
