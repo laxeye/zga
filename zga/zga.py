@@ -9,11 +9,12 @@ import re
 from Bio import SeqIO
 import hashlib
 import json
-
+from zga import __version__
 
 def parse_args():
 	'''Returns argparse.Namespace'''
-	parser = argparse.ArgumentParser(description="ZGA genome assembly and annotation pipeline")
+	parser = argparse.ArgumentParser(prog="zga",
+		description=f"ZGA genome assembly and annotation pipeline ver. {__version__}")
 
 	general_args = parser.add_argument_group(title="General options", description="")
 	general_args.add_argument("-s", "--first-step", help="First step of the pipeline", default="readqc",
@@ -34,6 +35,7 @@ def parse_args():
 		help="Show output from tools inside the pipeline")
 	general_args.add_argument("--domain", default="bacteria", choices=['archaea', 'bacteria'],
 		help="Provide prokaryotic domain: bacteria or archaea")
+	parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
 
 	# Input
 	input_args = parser.add_argument_group(title="Input files and options",
