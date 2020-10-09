@@ -1006,12 +1006,13 @@ def main():
 		logger.critical("Imposible to create directory \"%s\"!", args.output_dir)
 		raise e
 
-	fh = logging.FileHandler(os.path.join(args.output_dir, "zga.log"))
+	zgalogfile = os.path.join(args.output_dir, "zga.log")
+	fh = logging.FileHandler(zgalogfile)
 	fh.setLevel(logging.DEBUG)
 	fh.setFormatter(formatter)
 	logger.addHandler(fh)
 
-	logger.info("Pipeline started")
+	logger.info(f"ZGA ver. {__version__} started. Full log location: {zgalogfile}")
 
 	steps = {"readqc": 1, "processing": 2, "assembling": 3, "polishing": 4,
 		"annotation": 6, "check_genome": 5}
