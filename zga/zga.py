@@ -11,6 +11,7 @@ import hashlib
 import json
 from zga import __version__
 
+
 def parse_args():
 	'''Returns argparse.Namespace'''
 	parser = argparse.ArgumentParser(prog="zga",
@@ -106,7 +107,8 @@ def parse_args():
 	asly_args = parser.add_argument_group(title="Assembly settings")
 	asly_args.add_argument("-a", "--assembler",
 		default="unicycler", choices=["spades", "unicycler", "flye"],
-		help="Assembler: unicycler (default; better quality), spades (faster, may use mate-pair reads) or Flye (long reads only).")
+		help="Assembler: unicycler (default; better quality)"
+		+ ", spades (faster, may use mate-pair reads) or Flye (long reads only).")
 	asly_args.add_argument("--no-spades-correction", action="store_true",
 		help="Disable short read correction by SPAdes (works for SPAdes and unicycler).")
 	# Spades options
@@ -121,7 +123,8 @@ def parse_args():
 	asly_args.add_argument("--linear-seqs", default=0,
 		help="Expected number of linear sequences")
 	asly_args.add_argument("--extract-replicons", action="store_true",
-		help="Unicycler: extract replicons (e.g. plasmids) from the short-read based assembly to separate files")
+		help="Unicycler: extract complete replicons (e.g. plasmids)"
+		+ " from the short-read based assembly to separate files")
 	# Flye options
 	asly_args.add_argument("--flye-short-polish", action="store_true",
 		help="Perform polishing of Flye assembly with short reads using racon.")
@@ -162,8 +165,14 @@ def parse_args():
 
 	args = parser.parse_args()
 
-	if args.assembler == 'spades' and not ( bool(args.pe_1) |
-		bool(args.pe_merged) | bool(args.single_end) | bool(args.mp_1) ) :
+	if (args.assembler == 'spades'
+		and not (
+			bool(args.pe_1)
+			or bool(args.pe_merged)
+			or bool(args.single_end)
+			or bool(args.mp_1)
+		)
+	):
 		logger.error("Impossible to run SPAdes without short reads!")
 		raise Exception("Bad parameters.")
 
@@ -173,7 +182,7 @@ def parse_args():
 			logger.error("Impossible to run Flye on mixed long reads!")
 			raise Exception("Bad parameters.")
 
-		if not ( bool(args.nanopore) | bool(args.pacbio) ):
+		if not (bool(args.nanopore) or bool(args.pacbio)):
 			logger.error("Impossible to run Flye without long reads!")
 			raise Exception("Bad parameters.")
 
@@ -184,7 +193,7 @@ def parse_args():
 	if (args.flye_short_polish
 		or args.first_step == 'polishing'
 		or args.last_step == 'polishing'
-		):
+	):
 		args.perform_polishing = True
 
 	return args
@@ -198,7 +207,7 @@ def check_reads(args):
 	'''
 	libraries = []
 	read_list = [args.pe_1, args.pe_2, args.single_end, args.pe_merged,
-	args.mp_1, args.mp_2, args.pacbio, args.nanopore]
+		args.mp_1, args.mp_2, args.pacbio, args.nanopore]
 	read_list = list(filter(None.__ne__, read_list))
 
 	logger.info("Checking input files.")
@@ -209,7 +218,7 @@ def check_reads(args):
 				logger.error("File %s doesn't exist", f)
 				raise FileNotFoundError("File %s doesn't exist" % f)
 
-	short_libs={}
+	short_libs = {}
 	if args.pe_1 and args.pe_2:
 		short_libs["forward"] = args.pe_1
 		short_libs["reverse"] = args.pe_2
@@ -232,7 +241,7 @@ def check_reads(args):
 				"type": "mate-pair",
 				"forward": os.path.abspath(pair[0]),
 				"reverse": os.path.abspath(pair[1])
-				})
+			})
 
 	if args.pacbio:
 		for lib in args.pacbio:
@@ -296,7 +305,7 @@ def read_qc(args, reads):
 		for t, r in lib.items():
 			if t == "type":
 				continue
-			prefix = os.path.join(qcoutdir,os.path.split(r)[-1])
+			prefix = os.path.join(qcoutdir, os.path.split(r)[-1])
 			cmd = precmd + ["-i", r, "-h", f"{prefix}.html", "-j", f"{prefix}.json"]
 			logger.debug("QC of %s", r)
 			run_external(args, cmd)
@@ -312,9 +321,9 @@ def remove_intermediate(path, *files):
 def filter_by_tile(args, reads, readdir):
 	for index, lib in enumerate(reads, start=1):
 		if (lib["type"] == "short"
-				and "forward" in lib.keys()
-				and "reverse" in lib.keys()
-				):
+			and "forward" in lib.keys()
+			and "reverse" in lib.keys()
+		):
 			initial = (lib['forward'], (lib['reverse']))
 			filtered_pe_r1 = os.path.join(readdir, f"lib{index}.filtered.r1.fq.gz")
 			filtered_pe_r2 = os.path.join(readdir, f"lib{index}.filtered.r2.fq.gz")
@@ -342,10 +351,10 @@ def merge_bb(args, reads, readdir):
 	'''
 	for index, lib in enumerate(reads, start=1):
 		if (lib["type"] == "short"
-				and "forward" in lib.keys()
-				and "reverse" in lib.keys()
-				and "merged" not in lib.keys()
-				):
+			and "forward" in lib.keys()
+			and "reverse" in lib.keys()
+			and "merged" not in lib.keys()
+		):
 			# Initial, unmerged and merged filenames
 			initial = (lib['forward'], (lib['reverse']))
 			u1 = os.path.join(readdir, f"lib{index}.u1.fq.gz")
@@ -370,7 +379,6 @@ def merge_bb(args, reads, readdir):
 				remove_intermediate(readdir, *initial)
 				lib['forward'], lib['reverse'] = u1, u2
 				lib['merged'] = merged
-
 
 	return reads
 
@@ -534,7 +542,7 @@ def mp_read_processing(args, reads, readdir):
 			"nxtrim", "-1", lib['forward'], "-2", lib['reverse'],
 			"--separate", "--rf", "--justmp", "-O", prefix, "-l",
 			str(args.min_short_read_length)
-			]
+		]
 		logger.info("Processing mate-pair reads.")
 		if run_external(args, cmd).returncode == 0:
 			if args.use_unknown_mp:
@@ -604,14 +612,14 @@ def racon_polish(args, assembly, reads) -> str:
 					digest = hashlib.md5(r.stdout.encode('utf-8')).hexdigest()
 					suffix = "".join(
 						[chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 20, 2)]
-						)
+					)
 					fname = os.path.join(polish_dir, f"polished.{suffix}.fna")
 					try:
 						handle = open(fname, 'w')
 						handle.write(r.stdout)
 						handle.close()
 						assembly = fname
-					except Exception as e:
+					except Exception:
 						logger.error("Error during polishing: impossible to write file %s", fname)
 			else:
 				logger.error("Impossible to perform polishing.")
@@ -645,7 +653,7 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
 
 	reads = [x['single'] for x in reads if x['type'] == long_reads]
 	cmd += [flye_key, *reads]
-	
+
 	if args.flye_skip_long_polish:
 		cmd += ["--stop-after", "contigger"]
 
@@ -666,7 +674,7 @@ def get_spades_version() -> str:
 	'''Returns SPAdes version'''
 	try:
 		spades_stdout = str(subprocess.run(["spades.py", "-v"],
-			stdout=subprocess.PIPE,	stderr=subprocess.PIPE,
+			stdout=subprocess.PIPE, stderr=subprocess.PIPE,
 			universal_newlines=True).stdout)
 		spades_version = re.search(r'[\d\.]+', spades_stdout)[0]
 		return spades_version
@@ -742,7 +750,7 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 		version_stdout = subprocess.run(
 			["unicycler", "--version"], encoding="utf-8",
 			stderr=subprocess.PIPE, stdout=subprocess.PIPE
-			).stdout
+		).stdout
 		version = re.search(r'v(\d\S*)', version_stdout)[1]
 		logger.debug("Unicycler version %s available.", version)
 	except Exception as e:
@@ -759,9 +767,9 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 			if "forward" in lib.keys() and "reverse" in lib.keys():
 				cmd += ["-1", lib['forward'], "-2", lib['reverse']]
 			if "merged" in lib.keys():
-				cmd += [f"-s", lib['merged']]
+				cmd += ["-s", lib['merged']]
 			elif "single" in lib.keys():
-				cmd += [f"-s", lib['single']]
+				cmd += ["-s", lib['single']]
 			sr_parsed = True
 		if lib['type'] == 'nanopore':
 			cmd += ["-l", lib['single']]
@@ -845,7 +853,7 @@ def locus_tag_gen(genome) -> str:
 		digest = hashlib.md5(genomefile.read()).hexdigest()
 		locus_tag = "".join(
 			[chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 12, 2)]
-			)
+		)
 		logger.info("Locus tag generated: %s", locus_tag)
 		return locus_tag
 
@@ -889,10 +897,10 @@ def check_phix(args):
 	phix_path = os.path.join(
 		os.path.dirname(os.path.abspath(__file__)),
 		"data/phiX174.fasta"
-		)
+	)
 	blast_format = "6 sseqid pident slen length"
 	cmd = ["blastn",
-		"-query", phix_path,"-subject", args.genome,
+		"-query", phix_path, "-subject", args.genome,
 		"-outfmt", blast_format, "-evalue", "1e-6"]
 
 	logger.debug("Running: %s", " ".join(cmd))
@@ -947,7 +955,7 @@ def run_checkm(args):
 				universal_newlines=True,
 				stderr=subprocess.DEVNULL,
 				stdout=subprocess.PIPE
-				).stdout
+			).stdout
 		except Exception as e:
 			logger.critical("Failed to run CheckM!")
 			raise e
@@ -1083,7 +1091,7 @@ def main():
 		"polishing": 4,
 		"check_genome": 5,
 		"annotation": 6
-		}
+	}
 	args.first_step = steps[args.first_step]
 	args.last_step = steps[args.last_step]
 	if args.first_step <= 4:
@@ -1094,8 +1102,8 @@ def main():
 		and (
 			not args.genome
 			or not os.path.isfile(args.genome)
-			)
-		):
+		)
+	):
 		logger.error("Genome assembly is not provided")
 		raise FileNotFoundError()
 
@@ -1143,7 +1151,7 @@ def main():
 			with open(checkm_outfile) as result:
 				completeness, contamination, heterogeneity = list(
 					map(float, result.readlines()[3].split()[-3::1])
-					)
+				)
 				if completeness < 80.0 or (completeness - 5.0 * contamination < 50.0):
 					logger.warning("The genome assembly has low quality!")
 				logger.info("Genome completeness: %s%%", completeness)
