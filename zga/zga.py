@@ -166,7 +166,10 @@ def parse_args():
 			args.calculate_genome_size = True
 			logger.info("Genome size was not provided. It will be calculated with mash.")
 
-	if args.flye_short_polish:
+	if (args.flye_short_polish
+		or args.first_step == 'polishing'
+		or args.last_step == 'polishing'
+		):
 		args.perform_polishing = True
 
 	return args
