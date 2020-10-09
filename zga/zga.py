@@ -15,27 +15,35 @@ def parse_args():
 	'''Returns argparse.Namespace'''
 	parser = argparse.ArgumentParser(prog="zga",
 		description=f"ZGA genome assembly and annotation pipeline ver. {__version__}")
-
+	zga_steps = ["readqc", "processing", "assembling", "polishing", "check_genome", "annotation"]
 	general_args = parser.add_argument_group(title="General options", description="")
-	general_args.add_argument("-s", "--first-step", help="First step of the pipeline", default="readqc",
-		choices=["readqc", "processing", "assembling", "polishing", "check_genome", "annotation"])
-	general_args.add_argument("-l", "--last-step", help="Last step of the pipeline", default="annotation",
-		choices=["readqc", "processing", "assembling", "polishing", "check_genome", "annotation"])
-	general_args.add_argument("-o", "--output-dir", required=True, help="Output directory")
+	general_args.add_argument("-s", "--first-step",
+		choices=zga_steps, default="readqc",
+		help="First step of the pipeline. Default: readqc")
+	general_args.add_argument("-l", "--last-step",
+		choices=zga_steps, default="annotation",
+		help="Last step of the pipeline. Default: annotation")
+	general_args.add_argument("-o", "--output-dir", required=True,
+		help="Output directory")
 	general_args.add_argument("--force", action="store_true",
 		help="Overwrite output directory if exists")
 	general_args.add_argument("-t", "--threads", type=int, default=1,
 		help="Number of CPU threads to use (where possible)")
 	general_args.add_argument("-m", "--memory-limit", type=int, default=8,
 		help="Memory limit in GB (default 8)")
-	general_args.add_argument("--genus", default="Unknown", help="Provide genus if known")
-	general_args.add_argument("--species", default="sp.", help="Provide species if known")
-	general_args.add_argument("--strain", help="Provide strain if known")
+	general_args.add_argument("--genus", default="Unknown",
+		help="Provide genus if known")
+	general_args.add_argument("--species", default="sp.",
+		help="Provide species if known")
+	general_args.add_argument("--strain",
+		help="Provide strain if known")
 	general_args.add_argument("--transparent", action="store_true",
 		help="Show output from tools inside the pipeline")
-	general_args.add_argument("--domain", default="bacteria", choices=['archaea', 'bacteria'],
+	general_args.add_argument("--domain",
+		default="bacteria", choices=['archaea', 'bacteria'],
 		help="Provide prokaryotic domain: bacteria or archaea")
-	parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
+	parser.add_argument("-V", "--version",
+		action="version", version=f"%(prog)s {__version__}")
 
 	# Input
 	input_args = parser.add_argument_group(title="Input files and options",
@@ -96,7 +104,8 @@ def parse_args():
 		help="Include reads that are probably mate pairs (default: only known MP used)")
 
 	asly_args = parser.add_argument_group(title="Assembly settings")
-	asly_args.add_argument("-a", "--assembler", default="unicycler", choices=["spades", "unicycler", "flye"],
+	asly_args.add_argument("-a", "--assembler",
+		default="unicycler", choices=["spades", "unicycler", "flye"],
 		help="Assembler: unicycler (default; better quality), spades (faster, may use mate-pair reads) or Flye (long reads only).")
 	asly_args.add_argument("--no-spades-correction", action="store_true",
 		help="Disable short read correction by SPAdes (works for SPAdes and unicycler).")
@@ -128,22 +137,28 @@ def parse_args():
 	check_args.add_argument("--check-phix", action="store_true",
 		help="Check genome for presence of PhiX control sequence.")
 	# CheckM
-	check_args.add_argument("--checkm-mode", default="taxonomy_wf", choices=['taxonomy_wf', 'lineage_wf'],
+	check_args.add_argument("--checkm-mode",
+		default="taxonomy_wf", choices=['taxonomy_wf', 'lineage_wf'],
 		help="Select CheckM working mode. Default is checking for domain-specific marker-set.")
-	check_args.add_argument("--checkm-rank", help="Rank of taxon for CheckM. Run 'checkm taxon_list' for details.")
-	check_args.add_argument("--checkm-taxon", help="Taxon for CheckM. Run 'checkm taxon_list' for details.")
+	check_args.add_argument("--checkm-rank",
+		help="Rank of taxon for CheckM. Run 'checkm taxon_list' for details.")
+	check_args.add_argument("--checkm-taxon",
+		help="Taxon for CheckM. Run 'checkm taxon_list' for details.")
 	check_args.add_argument("--checkm-full-tree", action="store_true",
 		help="Use full tree for inference of marker set, requires LOTS of memory.")
 
 	anno_args = parser.add_argument_group(title="Annotation settings")
-	anno_args.add_argument("-g", "--genome", help="Genome assembly (when starting from annotation).")
-	anno_args.add_argument("--gcode", default=11, type=int, help="Genetic code.")
+	anno_args.add_argument("-g", "--genome",
+		help="Genome assembly (when starting from annotation).")
+	anno_args.add_argument("--gcode", default=11, type=int,
+		help="Genetic code.")
 	anno_args.add_argument("--locus-tag",
 		help="Locus tag prefix. If not provided prefix will be generated from MD5 checksum.")
 	anno_args.add_argument("--locus-tag-inc", default=10, type=int,
 		help="Locus tag increment, default = 10")
 	anno_args.add_argument("--center-name", help="Genome center name.")
-	anno_args.add_argument("--minimum-contig-length", help="Minimum sequence length in genome assembly.")
+	anno_args.add_argument("--minimum-contig-length",
+		help="Minimum sequence length in genome assembly.")
 
 	args = parser.parse_args()
 
@@ -275,7 +290,8 @@ def run_external(args, cmd, keep_stdout=False, keep_stderr=False):
 def read_qc(args, reads):
 	logger.info("Read quality control started")
 	qcoutdir = create_subdir(args.output_dir, "readQC")
-	precmd = ["fastp", "-L", "-Q", "-G", "-A", "-z", "1", "--stdout", "-w", str(args.threads)]
+	precmd = ["fastp", "-L", "-Q", "-G", "-A", "-z", "1", "--stdout",
+		"-w", str(args.threads)]
 	for lib in reads:
 		for t, r in lib.items():
 			if t == "type":
@@ -295,7 +311,10 @@ def remove_intermediate(path, *files):
 
 def filter_by_tile(args, reads, readdir):
 	for index, lib in enumerate(reads, start=1):
-		if lib["type"] == "short" and "forward" in lib.keys() and "reverse" in lib.keys():
+		if (lib["type"] == "short"
+				and "forward" in lib.keys()
+				and "reverse" in lib.keys()
+				):
 			initial = (lib['forward'], (lib['reverse']))
 			filtered_pe_r1 = os.path.join(readdir, f"lib{index}.filtered.r1.fq.gz")
 			filtered_pe_r2 = os.path.join(readdir, f"lib{index}.filtered.r2.fq.gz")
@@ -397,7 +416,10 @@ def bbduk_process(args, reads, readdir):
 
 def tadpole_correct(args, reads, readdir):
 	'''Correct short reads with tadpole'''
-	precmd = ["tadpole.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}", "mode=correct"]
+	precmd = ["tadpole.sh",
+		f"Xmx={args.memory_limit}G",
+		f"t={args.threads}",
+		"mode=correct"]
 
 	for index, lib in enumerate([lib for lib in reads if lib["type"] == "short"], start=1):
 		if "forward" in lib.keys() and "reverse" in lib.keys():
@@ -429,7 +451,9 @@ def tadpole_correct(args, reads, readdir):
 def read_processing(args, reads):
 	logger.info("Reads processing started")
 	readdir = create_subdir(args.output_dir, "reads")
-	sr_adapters = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/sr.adapters.fasta")
+	sr_adapters = os.path.join(
+		os.path.dirname(os.path.abspath(__file__)),
+		"data/sr.adapters.fasta")
 
 	if args.adapters and os.path.isfile(args.adapters):
 		args.adapters = os.path.abspath(args.adapters)
@@ -485,7 +509,8 @@ def mash_estimate(args, reads):
 	sketchprefix = os.path.join(os.path.dirname(reads_to_sketch[0]), "sketch")
 	cmd = ["mash", "sketch", "-r", "-m", str(args.mash_kmer_copies), "-o", sketchprefix]
 	cmd += reads_to_sketch
-	logger.info("Estimating genome size with mash using: %s", ", ".join(reads_to_sketch))
+	logger.info("Estimating genome size with mash using: %s",
+		", ".join(reads_to_sketch))
 	r = run_external(args, cmd, keep_stderr=True)
 
 	if r.returncode == 0:
@@ -523,9 +548,11 @@ def mp_read_processing(args, reads, readdir):
 						shutil.copyfileobj(src, dest)
 					with open(f"{prefix}_R2.unknown.fastq.gz", "rb") as src:
 						shutil.copyfileobj(src, dest)
-				lib['forward'], lib['reverse'] = (f"{prefix}_R1.all.fastq.gz", f"{prefix}_R2.all.fastq.gz")
+				lib['forward'], lib['reverse'] = (
+					f"{prefix}_R1.all.fastq.gz", f"{prefix}_R2.all.fastq.gz")
 			else:
-				lib['forward'], lib['reverse'] = (f"{prefix}_R1.mp.fastq.gz", f"{prefix}_R2.mp.fastq.gz")
+				lib['forward'], lib['reverse'] = (
+					f"{prefix}_R1.mp.fastq.gz", f"{prefix}_R2.mp.fastq.gz")
 
 	return reads
 
@@ -542,7 +569,9 @@ def map_short_reads(args, assembly, reads, target):
 	Returns:
 	target (str) : Path to mapping file
 	'''
-	cmd = ["minimap2", "-x", "sr", "-t", str(args.threads), "-a", "-o", target, assembly, reads]
+	cmd = ["minimap2",
+		"-x", "sr", "-t", str(args.threads),
+		"-a", "-o", target, assembly, reads]
 
 	logger.info("Mapping reads: %s", reads)
 	if run_external(args, cmd).returncode == 0:
@@ -573,7 +602,9 @@ def racon_polish(args, assembly, reads) -> str:
 					os.remove(mapping)
 				if r.returncode == 0:
 					digest = hashlib.md5(r.stdout.encode('utf-8')).hexdigest()
-					suffix = "".join([chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 20, 2)])
+					suffix = "".join(
+						[chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 20, 2)]
+						)
 					fname = os.path.join(polish_dir, f"polished.{suffix}.fna")
 					try:
 						handle = open(fname, 'w')
@@ -598,7 +629,9 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
 		logger.critical("Impossible to run flye without genome size estimation!")
 		sys.exit(1)
 
-	cmd = ["flye", "-o", aslydir, "-g", str(estimated_genome_size), "-t", str(args.threads)]
+	cmd = ["flye", "-o", aslydir,
+		"-g", str(estimated_genome_size),
+		"-t", str(args.threads)]
 
 	types = [x["type"] for x in reads]
 	if "nanopore" in types:
@@ -632,8 +665,9 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
 def get_spades_version() -> str:
 	'''Returns SPAdes version'''
 	try:
-		spades_stdout = str(subprocess.run(["spades.py", "-v"], stdout=subprocess.PIPE,
-			stderr=subprocess.PIPE, universal_newlines=True).stdout)
+		spades_stdout = str(subprocess.run(["spades.py", "-v"],
+			stdout=subprocess.PIPE,	stderr=subprocess.PIPE,
+			universal_newlines=True).stdout)
 		spades_version = re.search(r'[\d\.]+', spades_stdout)[0]
 		return spades_version
 	except Exception as e:
@@ -666,13 +700,15 @@ def spades_assemble(args, reads, aslydir) -> str:
 	for index, lib in enumerate(reads, start=1):
 		if lib['type'] == "short":
 			if "forward" in lib.keys() and "reverse" in lib.keys():
-				cmd += [f"--pe{index}-1", lib['forward'], f"--pe{index}-2", lib['reverse']]
+				cmd += [f"--pe{index}-1", lib['forward'],
+					f"--pe{index}-2", lib['reverse']]
 			if "merged" in lib.keys():
 				cmd += [f"--pe{index}-m", lib['merged']]
 			if "single" in lib.keys():
 				cmd += [f"--pe{index}-s", lib['single']]
 		if lib['type'] == 'mate-pair':
-			cmd += [f"--mp{index}-1", lib['forward'], f"--mp{index}-2", lib['reverse']]
+			cmd += [f"--mp{index}-1", lib['forward'],
+				f"--mp{index}-2", lib['reverse']]
 		if lib['type'] == 'nanopore':
 			cmd += ["--nanopore", reads['nanopore']]
 		if lib['type'] == 'pacbio':
@@ -703,8 +739,10 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 	assembly (str) : path to assembled genome
 	'''
 	try:
-		version_stdout = subprocess.run(["unicycler", "--version"], encoding="utf-8",
-			stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
+		version_stdout = subprocess.run(
+			["unicycler", "--version"], encoding="utf-8",
+			stderr=subprocess.PIPE, stdout=subprocess.PIPE
+			).stdout
 		version = re.search(r'v(\d\S*)', version_stdout)[1]
 		logger.debug("Unicycler version %s available.", version)
 	except Exception as e:
@@ -735,10 +773,11 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 
 	if run_external(args, cmd).returncode != 0:
 		logger.error("Genome assembly finished with errors.")
-		logger.error("Plese check %s for more information.", os.path.join(aslydir, "unicycler.log"))
+		logger.error("Plese check %s for more information.",
+			os.path.join(aslydir, "unicycler.log"))
 		raise Exception("Extermal software error")
 	else:
-		logger.debug("Assembling finished")
+		logger.info("Assembling finished")
 		assembly = os.path.join(aslydir, "assembly.fasta")
 		if args.extract_replicons:
 			extract_replicons(args, aslydir)
@@ -804,7 +843,9 @@ def locus_tag_gen(genome) -> str:
 	logger.info("No locus tag provided. Generating it as MD5 hash of genome")
 	with open(genome, 'rb') as genomefile:
 		digest = hashlib.md5(genomefile.read()).hexdigest()
-		locus_tag = "".join([chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 12, 2)])
+		locus_tag = "".join(
+			[chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 12, 2)]
+			)
 		logger.info("Locus tag generated: %s", locus_tag)
 		return locus_tag
 
@@ -845,9 +886,14 @@ def annotate(args) -> str:
 
 def check_phix(args):
 	logger.info("Checking assembly for presence of Illumina phiX control")
-	phix_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/phiX174.fasta")
+	phix_path = os.path.join(
+		os.path.dirname(os.path.abspath(__file__)),
+		"data/phiX174.fasta"
+		)
 	blast_format = "6 sseqid pident slen length"
-	cmd = ["blastn", "-query", phix_path, "-subject", args.genome, "-outfmt", blast_format, "-evalue", "1e-6"]
+	cmd = ["blastn",
+		"-query", phix_path,"-subject", args.genome,
+		"-outfmt", blast_format, "-evalue", "1e-6"]
 
 	logger.debug("Running: %s", " ".join(cmd))
 	try:
@@ -889,11 +935,19 @@ def run_checkm(args):
 
 	if args.checkm_mode == "taxonomy_wf":
 
-		cmd = ["checkm", "taxonomy_wf", "-f", checkm_outfile, "-x", checkm_ext, "-t", str(args.threads)]
+		cmd = ["checkm", "taxonomy_wf",
+			"-f", checkm_outfile,
+			"-x", checkm_ext,
+			"-t", str(args.threads)]
 
 		try:
-			checkm_taxon_list = subprocess.run(["checkm", "taxon_list"], encoding="utf-8",
-				universal_newlines=True, stderr=subprocess.DEVNULL, stdout=subprocess.PIPE).stdout
+			checkm_taxon_list = subprocess.run(
+				["checkm", "taxon_list"],
+				encoding="utf-8",
+				universal_newlines=True,
+				stderr=subprocess.DEVNULL,
+				stdout=subprocess.PIPE
+				).stdout
 		except Exception as e:
 			logger.critical("Failed to run CheckM!")
 			raise e
@@ -919,10 +973,14 @@ def run_checkm(args):
 		cmd += [args.checkm_rank, args.checkm_taxon, checkm_indir, checkm_outdir]
 
 	else:
-		cmd = ["checkm", "lineage_wf", "-f", checkm_outfile, "-t", str(args.threads), "-x", checkm_ext]
+		cmd = ["checkm", "lineage_wf",
+			"-f", checkm_outfile,
+			"-t", str(args.threads),
+			"-x", checkm_ext]
 		if not args.checkm_full_tree:
 			cmd += ["--reduced_tree"]
-		cmd += ["--pplacer_threads", str(args.threads), checkm_indir, checkm_outdir]
+		cmd += ["--pplacer_threads", str(args.threads),
+			checkm_indir, checkm_outdir]
 
 	rc = run_external(args, cmd).returncode
 
@@ -1015,17 +1073,29 @@ def main():
 	fh.setFormatter(formatter)
 	logger.addHandler(fh)
 
-	logger.info(f"ZGA ver. {__version__} started. Full log location: {zgalogfile}")
+	logger.info(f"ZGA ver. {__version__}")
+	logger.info(f"Full log location: {zgalogfile}")
 
-	steps = {"readqc": 1, "processing": 2, "assembling": 3, "polishing": 4,
-		"annotation": 6, "check_genome": 5}
+	steps = {
+		"readqc": 1,
+		"processing": 2,
+		"assembling": 3,
+		"polishing": 4,
+		"check_genome": 5,
+		"annotation": 6
+		}
 	args.first_step = steps[args.first_step]
 	args.last_step = steps[args.last_step]
 	if args.first_step <= 4:
 		reads = check_reads(args)
 		logger.debug("Input reads: %s", reads)
 
-	if args.first_step > 3 and (not args.genome or not os.path.isfile(args.genome)):
+	if (args.first_step > 3
+		and (
+			not args.genome
+			or not os.path.isfile(args.genome)
+			)
+		):
 		logger.error("Genome assembly is not provided")
 		raise FileNotFoundError()
 
@@ -1071,9 +1141,11 @@ def main():
 		checkm_outfile = run_checkm(args)
 		if checkm_outfile:
 			with open(checkm_outfile) as result:
-				completeness, contamination, heterogeneity = list(map(float, result.readlines()[3].split()[-3::1]))
+				completeness, contamination, heterogeneity = list(
+					map(float, result.readlines()[3].split()[-3::1])
+					)
 				if completeness < 80.0 or (completeness - 5.0 * contamination < 50.0):
-					logger.info("The genome assembly has low quality!")
+					logger.warning("The genome assembly has low quality!")
 				logger.info("Genome completeness: %s%%", completeness)
 				logger.info("Genome contamination: %s%%", contamination)
 				logger.info("Genome heterogeneity: %s%%", heterogeneity)
