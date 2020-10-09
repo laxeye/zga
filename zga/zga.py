@@ -763,7 +763,7 @@ def assemble(args, reads, estimated_genome_size) -> str:
 	logger.info("N50: %s", stats['N50'])
 	write_assembly_stats(args, stats, prefix=args.assembler, s_format="table")
 
-	return(assembly)
+	return assembly
 
 
 def extract_replicons(args, aslydir) -> int:
