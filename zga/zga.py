@@ -102,7 +102,9 @@ def parse_args():
 		help="Minimum copies of each k-mer to include in size estimation")
 	# Mate pair read processing
 	reads_args.add_argument("--use-unknown-mp", action="store_true",
-		help="Include reads that are probably mate pairs (default: only known MP used)")
+		help="NxTrim: Include reads that are probably mate pairs (default: only known MP used)")
+	reads_args.add_argument("--no-nxtrim", action="store_true",
+		help="Don't process mate-pair reads with NxTrim. Usefull for preprocessed reads")
 
 	asly_args = parser.add_argument_group(title="Assembly settings")
 	asly_args.add_argument("-a", "--assembler",
@@ -480,7 +482,8 @@ def read_processing(args, reads):
 	reads = merge_bb(args, reads, readdir)
 
 	# Processing Illumina mate-pairs
-	reads = mp_read_processing(args, reads, readdir)
+	if not args.no_nxtrim:
+		reads = mp_read_processing(args, reads, readdir)
 
 	logger.info("Read processing finished")
 
