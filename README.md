@@ -78,7 +78,7 @@ Otherwise you may install dependencies to existing conda environment:
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
-### DFAST database download
+#### DFAST database download
 
 After installation DFAST downloads some basic databases. It's recommended to download more databases using *dfast_file_downloader.py* command-line script:
 
@@ -129,6 +129,17 @@ ZGA may use unprocessed or processed sequencing reads from different platforms a
 `zga -1 Raw.R1.fq.gz -2 Raw.R2.fq.gz` unprocessed paired-end reads  
 `zga -1 Unmerged_1.fq -2 Unmerged_2.fq --pe-merged Merged.fq` reads after processing (overlapping reads merging)  
 `zga -1 Lib1.R1.fq.gz Lib2.R1.fq -2 Lib1.R2.fq Lib2.R2.fq` combination of reads from two sequencing libraries  
+
+### Output
+
+ZGA produces up to 4 sub-folders in output folder:
+
+* **readQC** - results of reaq quality control with *fastp*,
+* **reads** - processed reads,
+* **assembly** - folder produced by genomic assembler,
+* **annotation** - annotated genome.
+
+Log-file *zga.log* is available in the output folder.
 
 ### Usage examples
 
