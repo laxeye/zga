@@ -721,9 +721,9 @@ def spades_assemble(args, reads, aslydir) -> str:
 			cmd += [f"--mp{index}-1", lib['forward'],
 				f"--mp{index}-2", lib['reverse']]
 		if lib['type'] == 'nanopore':
-			cmd += ["--nanopore", reads['nanopore']]
+			cmd += ["--nanopore", lib['single']]
 		if lib['type'] == 'pacbio':
-			cmd += ["--pacbio", reads['pacbio']]
+			cmd += ["--pacbio", lib['single']]
 
 	if args.no_spades_correction:
 		cmd += ["--only-assembler"]
