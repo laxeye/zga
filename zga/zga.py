@@ -44,7 +44,7 @@ def parse_args():
 		default="bacteria", choices=['archaea', 'bacteria'],
 		help="Provide prokaryotic domain: bacteria or archaea")
 	parser.add_argument("-V", "--version",
-		action="version", version=f"%(prog)s {__version__}")
+		action="version", version=f"ZGA ver. {__version__}")
 
 	# Input
 	input_args = parser.add_argument_group(title="Input files and options",

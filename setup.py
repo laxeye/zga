@@ -31,5 +31,5 @@ setuptools.setup(
         "Topic :: Scientific/Engineering :: Bio-Informatics"
     ],
     python_requires='>=3.6',
-    install_requires='biopython'
+    install_requires='biopython<=1.77'
 )
