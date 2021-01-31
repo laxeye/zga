@@ -6,9 +6,9 @@ import sys
 import shutil
 import subprocess
 import re
-from Bio import SeqIO
 import hashlib
 import json
+from Bio import SeqIO
 from zga import __version__
 
 
@@ -278,6 +278,10 @@ def create_subdir(parent, child) -> str:
 
 
 def run_external(args, cmd, keep_stdout=False, keep_stderr=False):
+	'''Run external command using subprocess.
+
+	Returns subprocess.CompletedProcess
+	'''
 	logger.debug("Running: %s", " ".join(cmd))
 	stderr_dest = subprocess.PIPE if keep_stderr else subprocess.DEVNULL
 	stdout_dest = subprocess.PIPE if keep_stdout else subprocess.DEVNULL
@@ -299,6 +303,7 @@ def run_external(args, cmd, keep_stdout=False, keep_stderr=False):
 
 
 def read_qc(args, reads):
+	'''Perform read QC with fastp'''
 	logger.info("Read quality control started")
 	qcoutdir = create_subdir(args.output_dir, "readQC")
 	precmd = ["fastp", "-L", "-Q", "-G", "-A", "-z", "1", "--stdout",
@@ -314,6 +319,7 @@ def read_qc(args, reads):
 
 
 def remove_intermediate(path, *files):
+	'''Remove files from directory (path) and keep initial user files'''
 	for f in files:
 		if os.path.dirname(f) == path and os.path.exists(f):
 			logger.debug("Removing %s", f)
@@ -321,6 +327,7 @@ def remove_intermediate(path, *files):
 
 
 def filter_by_tile(args, reads, readdir):
+	'''Run filterbytile.sh (BBmap) for Illumina read filtering'''
 	for index, lib in enumerate(reads, start=1):
 		if (lib["type"] == "short"
 			and "forward" in lib.keys()
@@ -331,11 +338,13 @@ def filter_by_tile(args, reads, readdir):
 			filtered_pe_r2 = os.path.join(readdir, f"lib{index}.filtered.r2.fq.gz")
 
 			cmd = ["filterbytile.sh", f"in={initial[0]}", f"in2={initial[1]}",
-			f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}"]
+				f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}"]
 
 			if run_external(args, cmd).returncode == 0:
 				remove_intermediate(readdir, *initial)
 				lib['forward'], lib['reverse'] = filtered_pe_r1, filtered_pe_r2
+			else:
+				logger.warning("Filtering by tile wasn't perfomed correctly.")
 
 	return reads
 
@@ -348,7 +357,7 @@ def merge_bb(args, reads, readdir):
 	reads (dict) : input reads
 	readdir (path) : path to reads output directory
 
-	Retruns:
+	Returns:
 	reads (dict) : modified if bbmerge returns 0.
 	'''
 	for index, lib in enumerate(reads, start=1):
@@ -385,15 +394,37 @@ def merge_bb(args, reads, readdir):
 	return reads
 
 
+def repair_pair(args, readdir, lib, index):
+	'''Run repair.sh from BBmap
+
+	Returns:
+	(Fixed R1, Fixed R2), Singletons
+	'''
+	singletons = os.path.join(readdir, f"lib{index}.singletons.fq")
+	fixed = (os.path.join(readdir, f"lib{index}.repaired.r1.fq"),
+		os.path.join(readdir, f"lib{index}.repaired.r2.fq"))
+	cmd = ["repair.sh", f"in={lib[0]}", f"in2={lib[1]}",
+		f"out={fixed[0]}", f"out2={fixed[1]}",  f"outs={singletons}",
+		f"Xmx={args.memory_limit}G"]
+	if run_external(args, cmd).returncode == 0:
+		return (fixed, singletons)
+	logger.error("Error during repair of paired-end reads %s and %s",
+		lib[0], lib[1])
+	sys.exit(1)
+
+
 def bbduk_process(args, reads, readdir):
 	"""Perform trimming and filtering of short reads"""
 	bbduk_kmer = 19  # K-mer length for contaminant/adapter removal
 	precmd = ["bbduk.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}",
 			f"ref={args.adapters}", f"k={bbduk_kmer}", "ktrim=r",
-			"qtrim=r", f"trimq={args.quality_cutoff}", f"entropy={args.entropy_cutoff}",
+			"qtrim=r", f"trimq={args.quality_cutoff}",
+			f"entropy={args.entropy_cutoff}",
 			f"minlength={args.min_short_read_length}"]
 
-	for index, lib in enumerate([lib for lib in reads if lib["type"] == "short"], start=1):
+	for index, lib in enumerate(
+		[lib for lib in reads if lib["type"] == "short"],
+		start=1):
 
 		if "forward" in lib.keys() and "reverse" in lib.keys():
 			logger.info("Trimming and filtering paired end reads")
@@ -407,19 +438,34 @@ def bbduk_process(args, reads, readdir):
 			if run_external(args, cmd).returncode == 0:
 				remove_intermediate(readdir, *initial)
 				lib['forward'], lib['reverse'] = out_pe1, out_pe2
+			else:
+				logger.error(
+					"Error during processing paired-end reads %s and %s",
+					initial[0], initial[1]
+				)
+				logger.warning("Trying to repair paired-end reads.")
+				fixed, discarded = repair_pair(args, readdir, initial, index)
+				remove_intermediate(readdir, *initial)
+				cmd = precmd + [f"in={fixed[0]}", f"in2={fixed[1]}",
+					f"out={out_pe1}", f"out2={out_pe2}", f"stats={out_stats}"]
+				if run_external(args, cmd).returncode == 0:
+					remove_intermediate(readdir, *fixed)
+					lib['forward'], lib['reverse'] = out_pe1, out_pe2
+					if 'single' not in lib.keys():
+						lib['single'] = discarded
 
-		for lib_type in ["single", "merged"]:
-			if lib_type in lib.keys():
-				logger.info(f"Trimming and filtering {lib_type} reads")
-				initial = lib[lib_type]
-				out = os.path.join(readdir, f"lib{index}.{lib_type}.fq")
-				out_stats = os.path.join(readdir, f"lib{index}.bbduk.{lib_type}.txt")
+		for read_type in ["single", "merged"]:
+			if read_type in lib.keys():
+				logger.info("Trimming and filtering %s reads", read_type)
+				initial = lib[read_type]
+				out = os.path.join(readdir, f"lib{index}.{read_type}.fq")
+				out_stats = os.path.join(readdir, f"lib{index}.bbduk.{read_type}.txt")
 				cmd = precmd + [f"in={initial}", f"out={out}",
 					f"stats={out_stats}"]
 
 				if run_external(args, cmd).returncode == 0:
 					remove_intermediate(readdir, initial)
-					lib[lib_type] = out
+					lib[read_type] = out
 
 	return reads
 
@@ -444,21 +490,26 @@ def tadpole_correct(args, reads, readdir):
 				remove_intermediate(readdir, *initial)
 				lib['forward'], lib['reverse'] = out_pe1, out_pe2
 
-		for lib_type in ["single", "merged"]:
-			if lib_type in lib.keys():
-				logger.info(f"Error correction of {lib_type} reads")
-				initial = lib[lib_type]
-				out = os.path.join(readdir, f"lib{index}.ecc.{lib_type}.fq")
+		for read_type in ["single", "merged"]:
+			if read_type in lib.keys():
+				logger.info("Error correction of %s reads", read_type)
+				initial = lib[read_type]
+				out = os.path.join(readdir, f"lib{index}.ecc.{read_type}.fq")
 				cmd = precmd + [f"in={initial}", f"out={out}"]
 
 				if run_external(args, cmd).returncode == 0:
 					remove_intermediate(readdir, initial)
-					lib[lib_type] = out
+					lib[read_type] = out
 
 	return reads
 
 
 def read_processing(args, reads):
+	'''Pipeline for read processing
+
+	Returns
+	reads (dict)
+	'''
 	logger.info("Reads processing started")
 	readdir = create_subdir(args.output_dir, "reads")
 	sr_adapters = os.path.join(
@@ -762,7 +813,7 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 
 	cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads),
 		"--mode", args.unicycler_mode]
-	for index, lib in enumerate(reads, start=1):
+	for lib in reads:
 		sr_parsed = False
 		if lib['type'] == "short":
 			if sr_parsed:
@@ -862,6 +913,7 @@ def locus_tag_gen(genome) -> str:
 
 
 def annotate(args) -> str:
+	'''Returns path to annotated genome (FASTA)'''
 	logger.info("Genome annotation started")
 
 	try:
@@ -896,6 +948,12 @@ def annotate(args) -> str:
 
 
 def check_phix(args):
+	'''Checks assembly for phiX sequence
+
+	Returns
+	Path to clean genome assembly
+	'''
+
 	logger.info("Checking assembly for presence of Illumina phiX control")
 	phix_path = os.path.join(
 		os.path.dirname(os.path.abspath(__file__)),
@@ -908,8 +966,11 @@ def check_phix(args):
 
 	logger.debug("Running: %s", " ".join(cmd))
 	try:
-		blast_out = str(subprocess.run(cmd, universal_newlines=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout).rstrip()
+		blast_out = str(subprocess.run(
+			cmd, universal_newlines=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE
+		).stdout).rstrip()
 	except Exception as e:
+		logger.error("Error during BLAST+ run")
 		raise e
 
 	phix_contigs = []
@@ -932,7 +993,11 @@ def check_phix(args):
 
 
 def run_checkm(args):
-	'''Runs CheckM and returns it's output file or None'''
+	'''Run CheckM
+
+	Returns
+	Path to CheckM output file (str) or None
+	'''
 	checkm_indir = create_subdir(args.output_dir, "checkm_tmp_in")
 	try:
 		shutil.copy(args.genome, checkm_indir)
@@ -1002,6 +1067,7 @@ def run_checkm(args):
 	if rc == 0:
 		return checkm_outfile
 	else:
+		logger.error("CheckM didn't finish properly.")
 		return None
 
 
@@ -1018,18 +1084,20 @@ def get_N_L_metric(lengths, value=50):
 
 def assembly_stats(genome):
 	'''Returns a dict containing genome stats'''
-	stats = dict()
 	seq_records = SeqIO.parse(genome, "fasta")
 	lengths = sorted([len(x.seq) for x in seq_records], reverse=True)
-	stats['Sequence count'] = len(lengths)
-	stats['Total length'] = sum(lengths)
-	stats['Max length'] = lengths[0]
+	stats = {
+		'Sequence count': len(lengths),
+		'Total length': sum(lengths),
+		'Max length': lengths[0]
+	}
 	stats['N50'], stats['L50'] = get_N_L_metric(lengths, 50)
 	stats['N90'], stats['L90'] = get_N_L_metric(lengths, 90)
 	return stats
 
 
 def write_assembly_stats(args, stats, prefix, s_format="human"):
+	'''Write assembly stats to a file'''
 	ext_dict = {"human": "txt", "json": "json", "table": "tsv"}
 	filename = f"{prefix}.assembly.{ext_dict[s_format]}"
 	with open(os.path.join(args.output_dir, filename), 'w') as dest:
@@ -1084,8 +1152,8 @@ def main():
 	fh.setFormatter(formatter)
 	logger.addHandler(fh)
 
-	logger.info(f"ZGA ver. {__version__}")
-	logger.info(f"Full log location: {zgalogfile}")
+	logger.info("ZGA ver. %s", __version__)
+	logger.info("Full log location: %s", zgalogfile)
 
 	steps = {
 		"readqc": 1,

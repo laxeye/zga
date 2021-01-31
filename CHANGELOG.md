@@ -1,5 +1,9 @@
 ### ZGA changelog
 
+**0.0.9**
+
++ Repairing of paired-end read files with different read count (BBmap)
+
 **0.0.8**
 
 + Genome assembly stats
