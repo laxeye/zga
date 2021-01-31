@@ -58,6 +58,7 @@ ZGA uses several software and libraries including:
 * [SPAdes](http://cab.spbu.ru/software/spades/) (>= 3.12 to support merged paired-end reads, >= 3.5.0 to support Nanopore reads)
 * [Unicycler](https://github.com/rrwick/Unicycler/)
 * [Flye](https://github.com/fenderglass/Flye) >= 2.6
+* [minimap2](https://github.com/lh3/minimap2/)
 * [racon](https://github.com/lbcb-sci/racon)
 * [CheckM](https://github.com/Ecogenomics/CheckM) >= 1.1.0
 * [BioPython](https://biopython.org/) <= 1.77 (In 1.78 Bio.Alphabet was removed)
@@ -66,7 +67,7 @@ ZGA uses several software and libraries including:
 
 You may install all dependencies separately using **conda**. It's highly recommended to create a new conda environment:
 
-`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast "biopython<=1.77" nxtrim "mash>=2" flye racon "samtools>=1.9"`
+`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast "biopython<=1.77" nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9"`
 
 and activate it
 
@@ -74,7 +75,7 @@ and activate it
 
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast "biopython<=1.77" nxtrim "mash>=2" flye racon "samtools>=1.9"`
+`conda install "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast "biopython<=1.77" nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9"`
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
@@ -179,6 +180,7 @@ ZGA is in the stage of active development.
 Known issues and limitations:
 
 * Unicycler can't use mate-pair reads or multiple libraries of same type.
+* Unicycler works better with SPAdes 3.12 than 3.14
 * It's not possible to install all dependencies with Python 3.8 via conda, please use 3.7 or 3.6.
 
 Don't hesitate to report bugs or features!
@@ -200,6 +202,8 @@ Bankevich, A., Nurk, S., Antipov, D., Gurevich, A. A., Dvorkin, M., Kulikov, A. 
 Wick, R. R., Judd, L. M., Gorrie, C. L., & Holt, K. E. (2017). Unicycler: resolving bacterial genome assemblies from short and long sequencing reads. PLoS computational biology, 13(6), e1005595. https://doi.org/10.1371/journal.pcbi.1005595
 
 Vaser, R., Sović, I., Nagarajan, N., & Šikić, M. (2017). Fast and accurate de novo genome assembly from long uncorrected reads. Genome research, 27(5), 737-746. https://genome.cshlp.org/content/27/5/737.full
+
+Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics, 34:3094-3100. https://dx.doi.org/10.1093/bioinformatics/bty191
 
 Kolmogorov, M., Yuan, J., Lin, Y., & Pevzner, P. A. (2019). Assembly of long, error-prone reads using repeat graphs. Nature biotechnology, 37(5), 540-546. https://doi.org/10.1038/s41587-019-0072-8
 
