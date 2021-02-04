@@ -277,7 +277,7 @@ def create_subdir(parent, child) -> str:
 	return path
 
 
-def run_external(args, cmd, keep_stdout=False, keep_stderr=False):
+def run_external(args, cmd, keep_stdout=False, keep_stderr=True):
 	'''Run external command using subprocess.
 
 	Returns subprocess.CompletedProcess
@@ -286,20 +286,15 @@ def run_external(args, cmd, keep_stdout=False, keep_stderr=False):
 	stderr_dest = subprocess.PIPE if keep_stderr else subprocess.DEVNULL
 	stdout_dest = subprocess.PIPE if keep_stdout else subprocess.DEVNULL
 
-	if args.transparent:
-		if keep_stdout:
-			r = subprocess.run(cmd, stdout=subprocess.PIPE, encoding="utf-8")
-		elif keep_stderr:
-			r = subprocess.run(cmd, stderr=subprocess.PIPE, encoding="utf-8")
-		else:
-			r = subprocess.run(cmd, stdout=subprocess.DEVNULL)
-	else:
-		r = subprocess.run(cmd, stderr=stderr_dest, stdout=stdout_dest, encoding="utf-8")
-
-	if r.returncode != 0:
-		logger.error("Non-zero return code of %s", " ".join(cmd))
-
-	return r
+	try:
+		r = subprocess.run(cmd, check=True, stderr=stderr_dest, stdout=stdout_dest, encoding="utf-8")
+		if args.transparent:
+			print(r.stderr, file=sys.stderr)
+		return r
+	except subprocess.CalledProcessError as e:
+		logger.error(e)
+		logger.error("External tool error:", e.stderr)
+		return None
 
 
 def read_qc(args, reads):
@@ -338,9 +333,10 @@ def filter_by_tile(args, reads, readdir):
 			filtered_pe_r2 = os.path.join(readdir, f"lib{index}.filtered.r2.fq.gz")
 
 			cmd = ["filterbytile.sh", f"in={initial[0]}", f"in2={initial[1]}",
-				f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}"]
+				f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}",
+				f"-Xmx={args.memory_limit}G"]
 
-			if run_external(args, cmd).returncode == 0:
+			if run_external(args, cmd) is not None:
 				remove_intermediate(readdir, *initial)
 				lib['forward'], lib['reverse'] = filtered_pe_r1, filtered_pe_r2
 			else:
@@ -386,7 +382,7 @@ def merge_bb(args, reads, readdir):
 				cmd += ["qtrim2=t", f"trimq={args.bbmerge_trim}"]
 			logger.info("Merging paired-end reads.")
 
-			if run_external(args, cmd).returncode == 0:
+			if run_external(args, cmd) is not None:
 				remove_intermediate(readdir, *initial)
 				lib['forward'], lib['reverse'] = u1, u2
 				lib['merged'] = merged
@@ -404,9 +400,9 @@ def repair_pair(args, readdir, lib, index):
 	fixed = (os.path.join(readdir, f"lib{index}.repaired.r1.fq"),
 		os.path.join(readdir, f"lib{index}.repaired.r2.fq"))
 	cmd = ["repair.sh", f"in={lib[0]}", f"in2={lib[1]}",
-		f"out={fixed[0]}", f"out2={fixed[1]}",  f"outs={singletons}",
+		f"out={fixed[0]}", f"out2={fixed[1]}", f"outs={singletons}",
 		f"Xmx={args.memory_limit}G"]
-	if run_external(args, cmd).returncode == 0:
+	if run_external(args, cmd) is not None:
 		return (fixed, singletons)
 	logger.error("Error during repair of paired-end reads %s and %s",
 		lib[0], lib[1])
@@ -435,7 +431,7 @@ def bbduk_process(args, reads, readdir):
 			cmd = precmd + [f"in={initial[0]}", f"in2={initial[1]}",
 				f"out={out_pe1}", f"out2={out_pe2}", f"stats={out_stats}"]
 
-			if run_external(args, cmd).returncode == 0:
+			if run_external(args, cmd) is not None:
 				remove_intermediate(readdir, *initial)
 				lib['forward'], lib['reverse'] = out_pe1, out_pe2
 			else:
@@ -448,7 +444,7 @@ def bbduk_process(args, reads, readdir):
 				remove_intermediate(readdir, *initial)
 				cmd = precmd + [f"in={fixed[0]}", f"in2={fixed[1]}",
 					f"out={out_pe1}", f"out2={out_pe2}", f"stats={out_stats}"]
-				if run_external(args, cmd).returncode == 0:
+				if run_external(args, cmd) is not None:
 					remove_intermediate(readdir, *fixed)
 					lib['forward'], lib['reverse'] = out_pe1, out_pe2
 					if 'single' not in lib.keys():
@@ -463,7 +459,7 @@ def bbduk_process(args, reads, readdir):
 				cmd = precmd + [f"in={initial}", f"out={out}",
 					f"stats={out_stats}"]
 
-				if run_external(args, cmd).returncode == 0:
+				if run_external(args, cmd) is not None:
 					remove_intermediate(readdir, initial)
 					lib[read_type] = out
 
@@ -486,7 +482,7 @@ def tadpole_correct(args, reads, readdir):
 			cmd = precmd + [f"in={initial[0]}", f"in2={initial[1]}",
 				f"out={out_pe1}", f"out2={out_pe2}"]
 
-			if run_external(args, cmd).returncode == 0:
+			if run_external(args, cmd) is not None:
 				remove_intermediate(readdir, *initial)
 				lib['forward'], lib['reverse'] = out_pe1, out_pe2
 
@@ -497,7 +493,7 @@ def tadpole_correct(args, reads, readdir):
 				out = os.path.join(readdir, f"lib{index}.ecc.{read_type}.fq")
 				cmd = precmd + [f"in={initial}", f"out={out}"]
 
-				if run_external(args, cmd).returncode == 0:
+				if run_external(args, cmd) is not None:
 					remove_intermediate(readdir, initial)
 					lib[read_type] = out
 
@@ -575,7 +571,7 @@ def mash_estimate(args, reads):
 		", ".join(reads_to_sketch))
 	r = run_external(args, cmd, keep_stderr=True)
 
-	if r.returncode == 0:
+	if r is not None:
 		result = r.stderr.split("\n")
 		estimations = [float(x.split()[-1]) for x in result if "Estimated" in x.split()]
 		best_estimation = sorted(zip(estimations[::2], estimations[1::2]), key=lambda x: -x[1])[0]
@@ -598,7 +594,7 @@ def mp_read_processing(args, reads, readdir):
 			str(args.min_short_read_length)
 		]
 		logger.info("Processing mate-pair reads.")
-		if run_external(args, cmd).returncode == 0:
+		if run_external(args, cmd) is not None:
 			if args.use_unknown_mp:
 				with open(f"{prefix}_R1.all.fastq.gz", "wb") as dest:
 					with open(f"{prefix}_R1.mp.fastq.gz", "rb") as src:
@@ -636,7 +632,7 @@ def map_short_reads(args, assembly, reads, target):
 		"-a", "-o", target, assembly, reads]
 
 	logger.info("Mapping reads: %s", reads)
-	if run_external(args, cmd).returncode == 0:
+	if run_external(args, cmd) is not None:
 		return target
 	else:
 		logger.error("Unsuccesful mapping.")
@@ -662,7 +658,7 @@ def racon_polish(args, assembly, reads) -> str:
 				r = run_external(args, cmd, keep_stdout=True)
 				if os.path.exists(mapping):
 					os.remove(mapping)
-				if r.returncode == 0:
+				if r is not None:
 					digest = hashlib.md5(r.stdout.encode('utf-8')).hexdigest()
 					suffix = "".join(
 						[chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 20, 2)]
@@ -711,17 +707,17 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
 	if args.flye_skip_long_polish:
 		cmd += ["--stop-after", "contigger"]
 
-	if run_external(args, cmd).returncode != 0:
-		logger.error("Genome assembly finished with errors.")
-		logger.critical("Plese check %s for more information.", os.path.join(aslydir, "flye.log"))
-		raise Exception("Extermal software error")
-	else:
+	if run_external(args, cmd) is not None:
 		logger.debug("Assembling finished")
 		if args.flye_skip_long_polish:
 			assembly = os.path.join(aslydir, "30-contigger/contigs.fasta")
 		else:
 			assembly = os.path.join(aslydir, "assembly.fasta")
 		return assembly
+	else:
+		logger.error("Genome assembly finished with errors.")
+		logger.critical("Plese check %s for more information.", os.path.join(aslydir, "flye.log"))
+		raise Exception("Extermal software error")
 
 
 def get_spades_version() -> str:
@@ -781,17 +777,17 @@ def spades_assemble(args, reads, aslydir) -> str:
 	if args.spades_k_list:
 		cmd += ["-k", args.spades_k_list]
 
-	if run_external(args, cmd).returncode != 0:
-		logger.error("Genome assembly finished with errors.")
-		logger.error("Plese check %s for more information.",
-			os.path.join(aslydir, "spades.log"))
-		raise Exception("Extermal software error")
-	else:
+	if run_external(args, cmd) is not None:
 		logger.debug("Assembling finished")
 		if args.use_scaffolds:
 			return os.path.join(aslydir, "scaffolds.fasta")
 		else:
 			return os.path.join(aslydir, "contigs.fasta")
+	else:
+		logger.error("Genome assembly finished with errors.")
+		logger.error("Plese check %s for more information.",
+			os.path.join(aslydir, "spades.log"))
+		raise Exception("Extermal software error")
 
 
 def unicycler_assemble(args, reads, aslydir) -> str:
@@ -833,17 +829,17 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 	if args.no_spades_correction:
 		cmd += ["--no_correct"]
 
-	if run_external(args, cmd).returncode != 0:
-		logger.error("Genome assembly finished with errors.")
-		logger.error("Plese check %s for more information.",
-			os.path.join(aslydir, "unicycler.log"))
-		raise Exception("Extermal software error")
-	else:
+	if run_external(args, cmd) is not None:
 		logger.info("Assembling finished")
 		assembly = os.path.join(aslydir, "assembly.fasta")
 		if args.extract_replicons:
 			extract_replicons(args, aslydir)
 		return assembly
+	else:
+		logger.error("Genome assembly finished with errors.")
+		logger.error("Plese check %s for more information.",
+			os.path.join(aslydir, "unicycler.log"))
+		raise Exception("Extermal software error")
 
 
 def assemble(args, reads, estimated_genome_size) -> str:
@@ -942,7 +938,7 @@ def annotate(args) -> str:
 	if args.minimum_contig_length:
 		cmd += ["--minimum_length", args.minimum_contig_length]
 
-	if run_external(args, cmd).returncode == 0:
+	if run_external(args, cmd) is not None:
 		args.genome = os.path.join(annodir, "genome.fna")
 	return args.genome
 
@@ -1058,13 +1054,13 @@ def run_checkm(args):
 		cmd += ["--pplacer_threads", str(args.threads),
 			checkm_indir, checkm_outdir]
 
-	rc = run_external(args, cmd).returncode
+	r = run_external(args, cmd)
 
 	# Cleaning after CheckM
 	shutil.rmtree(checkm_indir)
 	shutil.rmtree(checkm_outdir)
 
-	if rc == 0:
+	if r is not None:
 		return checkm_outfile
 	else:
 		logger.error("CheckM didn't finish properly.")
