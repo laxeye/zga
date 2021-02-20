@@ -39,6 +39,8 @@ If You have troubles with bioconda channel try to use my personal channel https:
 
 ### Install from PyPI
 
+[![Downloads](https://pepy.tech/badge/zga/month)](https://pypi.python.org/pypi/zga)
+
 Run `pip install zga`. Biopython is the only one dependency installed from PyPI. All other dependencies You should install manually or using **conda** as mentioned above. CheckM is available on **PyPi**, but it's easier to install it using **conda**.
 
 ### Get source from Github
@@ -125,6 +127,8 @@ ZGA may use unprocessed or processed sequencing reads from different platforms a
 `--pacbio` for PacBio single-end sequencing reads  
 `--nanopore` for Oxford Nanopore sequencing reads  
 
+When `bbduk.sh` (short read trimming tool) throws an exception ZGA tries to repair reads with `repair.sh` (from BBMap).
+
 #### Examples
 
 `zga -1 Raw.R1.fq.gz -2 Raw.R2.fq.gz` unprocessed paired-end reads  
@@ -189,7 +193,7 @@ Don't hesitate to report bugs or features!
 
 It's a great pleasure to know, that your software is useful. Please cite ZGA:
 
-Korzhenkov A. (2020). ZGA: prokaryotic genome assembly and annotation pipeline. URL: https://github.com/laxeye/zga/
+Korzhenkov A. (2021). ZGA: prokaryotic genome assembly and annotation pipeline. URL: https://github.com/laxeye/zga/
 
 And of course tools it's using:
 
