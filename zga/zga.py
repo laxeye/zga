@@ -292,8 +292,10 @@ def run_external(args, cmd, keep_stdout=False, keep_stderr=True):
 			print(r.stderr, file=sys.stderr)
 		return r
 	except subprocess.CalledProcessError as e:
-		logger.error(e)
-		logger.error("External tool error:", e.stderr)
+		logger.error("Error during execution of: %s", ' '.join(e.cmd))
+		logger.info("Please see the logfile for additional information: %s",
+			os.path.join(args.output_dir, "zga.log"))
+		logger.debug("External tool stderr:\n%s", e.stderr)
 		return None
 
 
