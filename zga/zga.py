@@ -122,7 +122,7 @@ def parse_args():
 	asly_args.add_argument("--unicycler-mode", default="normal",
 		choices=['conservative', 'normal', 'bold'],
 		help="Unicycler: assember mode: conservative, normal (default) or bold.")
-	asly_args.add_argument("--linear-seqs", default=0,
+	asly_args.add_argument("--linear-seqs", default=0, type=int,
 		help="Expected number of linear sequences")
 	asly_args.add_argument("--extract-replicons", action="store_true",
 		help="Unicycler: extract complete replicons (e.g. plasmids)"
@@ -134,7 +134,7 @@ def parse_args():
 		help="Skip stage of genome polishing with long reads.")
 	asly_args.add_argument("--perform-polishing", action="store_true",
 		help="Perform polishing. Useful only for flye assembly of long reads and short reads available.")
-	asly_args.add_argument("--polishing-iterations", default=1,
+	asly_args.add_argument("--polishing-iterations", default=1, type=int,
 		help="Number of polishing iterations.")
 
 	check_args = parser.add_argument_group(title="Genome check settings")
