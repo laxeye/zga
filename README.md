@@ -193,7 +193,7 @@ Don't hesitate to report bugs or features!
 
 It's a great pleasure to know, that your software is useful. Please cite ZGA:
 
-Korzhenkov A. (2021). ZGA: prokaryotic genome assembly and annotation pipeline. URL: https://github.com/laxeye/zga/
+Korzhenkov A. 2021. ZGA: a flexible pipeline for read processing, de novo assembly and annotation of prokaryotic genomes. bioRxiv https://doi.org/10.1101/2021.04.27.441618v1
 
 And of course tools it's using:
 
