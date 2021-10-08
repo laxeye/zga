@@ -1,5 +1,9 @@
 ### ZGA changelog
 
+**0.1a**
+
++ Providing custom configuration to DFAST
+
 **0.0.9**
 
 + Repairing of paired-end read files with different read count (BBmap)

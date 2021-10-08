@@ -2,6 +2,7 @@
 
 [![version status](https://img.shields.io/pypi/v/zga.svg)](https://pypi.python.org/pypi/zga)
 [![Anaconda Cloud](https://anaconda.org/bioconda/zga/badges/installer/conda.svg)](https://anaconda.org/bioconda/zga/)
+[![Publication](https://img.shields.io/badge/DOI-published-green.svg)](https://dx.doi.org/10.1101/2021.04.27.441618)
 
 ## Main Features
 
@@ -25,7 +26,6 @@ The simplest way to install ZGA and all dependencies is **conda**:
 1. You need to install conda, e.g. [**miniconda**](https://conda.io/en/latest/miniconda.html). Python 3.7 is preferred.
 
 2. After installation You should add channels - the conda's software sources:  
-`conda config --add channels defaults`  
 `conda config --add channels bioconda`  
 `conda config --add channels conda-forge`
 
@@ -63,13 +63,13 @@ ZGA uses several software and libraries including:
 * [minimap2](https://github.com/lh3/minimap2/)
 * [racon](https://github.com/lbcb-sci/racon)
 * [CheckM](https://github.com/Ecogenomics/CheckM) >= 1.1.0
-* [BioPython](https://biopython.org/) <= 1.77 (In 1.78 Bio.Alphabet was removed)
+* [BioPython](https://biopython.org/)
 * [NCBI BLAST+](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
 * [DFAST](https://github.com/nigyta/dfast_core)
 
 You may install all dependencies separately using **conda**. It's highly recommended to create a new conda environment:
 
-`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast "biopython<=1.77" nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9"`
+`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython"nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9"`
 
 and activate it
 
@@ -77,7 +77,7 @@ and activate it
 
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast "biopython<=1.77" nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9"`
+`conda install "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9"`
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
@@ -86,6 +86,12 @@ Of course, it's possible to use *another ways* even compile all tools from sourc
 After installation DFAST downloads some basic databases. It's recommended to download more databases using *dfast_file_downloader.py* command-line script:
 
 Run `dfast_file_downloader.py -h` to see available databases and options.
+
+Default databases may be donloaded with `dfast_file_downloader.py --protein dfast --cdd Cog --hmm TIGR`
+
+Soon auto-download of databases during installation with conda will be available.
+
+If You want to use more databases You need to edit DFAST configuration file and provide it to ZGA with `--dfast-config` option.
 
 ### Operating systems requirements
 
@@ -193,7 +199,7 @@ Don't hesitate to report bugs or features!
 
 It's a great pleasure to know, that your software is useful. Please cite ZGA:
 
-Korzhenkov A. 2021. ZGA: a flexible pipeline for read processing, de novo assembly and annotation of prokaryotic genomes. bioRxiv https://doi.org/10.1101/2021.04.27.441618v1
+Korzhenkov A. 2021. ZGA: a flexible pipeline for read processing, de novo assembly and annotation of prokaryotic genomes. bioRxiv https://doi.org/10.1101/2021.04.27.441618
 
 And of course tools it's using:
 

@@ -164,6 +164,8 @@ def parse_args():
 	anno_args.add_argument("--center-name", help="Genome center name.")
 	anno_args.add_argument("--minimum-contig-length",
 		help="Minimum sequence length in genome assembly.")
+	anno_args.add_argument("--dfast-config",
+		help="Custom DFAST configuration file.")
 
 	args = parser.parse_args()
 
@@ -197,6 +199,16 @@ def parse_args():
 		or args.last_step == 'polishing'
 	):
 		args.perform_polishing = True
+
+	if args.dfast_config:
+		if os.path.isfile(args.dfast_config):
+			args.dfast_config = os.path.abspath(args.dfast_config)
+		else:
+			logger.error("File \"%s\" not found!", args.dfast_config)
+			raise FileNotFoundError(
+				"DFAST config file \"%s\" not found." % args.dfast_config
+				)
+
 
 	return args
 
@@ -939,8 +951,10 @@ def annotate(args) -> str:
 		cmd += ["--step", str(args.locus_tag_inc)]
 	if args.minimum_contig_length:
 		cmd += ["--minimum_length", args.minimum_contig_length]
+	if args.dfast_config:
+		cmd += ["----config", args.dfast_config]
 
-	if run_external(args, cmd) is not None:
+	if run_external(args, cmd):
 		args.genome = os.path.join(annodir, "genome.fna")
 	return args.genome
 
@@ -986,6 +1000,8 @@ def check_phix(args):
 			with open(newgenome, "w") as handle:
 				SeqIO.write(records, handle, "fasta")
 				args.genome = newgenome
+		else:
+			logger.info("PhiX wasn't found.")
 
 	return args.genome
 
