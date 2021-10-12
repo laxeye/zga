@@ -3,6 +3,7 @@
 **0.1a**
 
 + Providing custom configuration to DFAST
++ Dockerfile. Warning: the image takes about 8 GB :(
 
 **0.0.9**
 

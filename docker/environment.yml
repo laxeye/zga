@@ -1,0 +1,8 @@
+name: zga
+channels:
+   - conda-forge
+   - bioconda
+dependencies:
+   - python>=3.6
+   - checkm-genome
+   - zga
