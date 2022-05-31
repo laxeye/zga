@@ -2,8 +2,10 @@
 
 **0.1a**
 
++ Short reads normalization by k-mer count (BBnorm)
 + Providing custom configuration to DFAST
-+ Dockerfile. Warning: the image takes about 8 GB :(
++ Dockerfile added. Warning: the image takes about 8 GB :(
+* Merging of paired-end reads (BBmerge) is now optional
 
 **0.0.9**
 

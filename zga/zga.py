@@ -96,6 +96,8 @@ def parse_args():
 		help="K-mer length for read extension, default 40.")
 	reads_args.add_argument("--bbmerge-trim", type=int,
 		help="Before merging trim bases with phred score less than a specified value.")
+	reads_args.add_argument("--normalize-kmer-cov", type=int,
+		help="Normalize read depth based on kmer counts to arbitrary value.")
 	reads_args.add_argument("--calculate-genome-size", action="store_true",
 		help="Estimate genome size with mash.")
 	reads_args.add_argument("--genome-size-estimation", type=int,
@@ -210,7 +212,6 @@ def parse_args():
 			raise FileNotFoundError(
 				"DFAST config file \"%s\" not found." % args.dfast_config
 				)
-
 
 	return args
 
@@ -516,6 +517,41 @@ def tadpole_correct(args, reads, readdir):
 	return reads
 
 
+def bbnorm(args, reads, readdir):
+	'''Normalize reads by k-mer coverage depth with BBnorm'''
+	precmd = ["bbnorm.sh",
+		f"Xmx={args.memory_limit}G",
+		f"t={args.threads}",
+		f"minq={args.quality_cutoff}",
+		f"target={args.normalize_kmer_cov}"]
+
+	for index, lib in enumerate([lib for lib in reads if lib["type"] == "short"], start=1):
+		if "forward" in lib.keys() and "reverse" in lib.keys():
+			logger.info("Normalization of paired end reads")
+			initial = (lib['forward'], (lib['reverse']))
+			out_pe1 = os.path.join(readdir, f"lib{index}.norm.pe.r1.fq")
+			out_pe2 = os.path.join(readdir, f"lib{index}.norm.pe.r2.fq")
+			cmd = precmd + [f"in={initial[0]}", f"in2={initial[1]}",
+				f"out={out_pe1}", f"out2={out_pe2}"]
+
+			if run_external(args, cmd) is not None:
+				remove_intermediate(readdir, *initial)
+				lib['forward'], lib['reverse'] = out_pe1, out_pe2
+
+		for read_type in ["single", "merged"]:
+			if read_type in lib.keys():
+				logger.info("Normalization of %s reads", read_type)
+				initial = lib[read_type]
+				out = os.path.join(readdir, f"lib{index}.norm.{read_type}.fq")
+				cmd = precmd + [f"in={initial}", f"out={out}"]
+
+				if run_external(args, cmd) is not None:
+					remove_intermediate(readdir, initial)
+					lib[read_type] = out
+
+	return reads
+
+
 def read_processing(args, reads):
 	'''Pipeline for read processing
 
@@ -541,6 +577,9 @@ def read_processing(args, reads):
 	if args.tadpole_correct:
 		reads = tadpole_correct(args, reads, readdir)
 
+	if args.normalize_kmer_cov:
+		reads = bbnorm(args, reads, readdir)
+
 	# Merging overlapping paired-end reads
 	if args.bbmerge:
 		reads = merge_bb(args, reads, readdir)
@@ -565,9 +604,11 @@ def mash_estimate(args, reads):
 	estimated genome size (int) or None
 
 	Parsing mash output to extract estimated genome size from stderr lines:
+
 	Estimated genome size: 1.234e+06
 	Estimated coverage:    56.789
-	We create list of tuples (size, coverage), sort it and get value with greatest covarage.
+
+	Genome size with highest coverage is taken from the sorted list of tuples (size, coverage).
 	'''
 	reads_to_sketch = []
 
@@ -955,7 +996,7 @@ def annotate(args) -> str:
 	if args.minimum_contig_length:
 		cmd += ["--minimum_length", args.minimum_contig_length]
 	if args.dfast_config:
-		cmd += ["----config", args.dfast_config]
+		cmd += ["--config", args.dfast_config]
 
 	if run_external(args, cmd):
 		args.genome = os.path.join(annodir, "genome.fna")
