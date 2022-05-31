@@ -211,7 +211,7 @@ def parse_args():
 			logger.error("File \"%s\" not found!", args.dfast_config)
 			raise FileNotFoundError(
 				"DFAST config file \"%s\" not found." % args.dfast_config
-				)
+			)
 
 	return args
 
@@ -866,7 +866,9 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 		raise e
 
 	cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads),
-		"--mode", args.unicycler_mode]
+		"--mode", args.unicycler_mode,
+		"--spades_options", f'"--memory {args.memory_limit}"']
+
 	for lib in reads:
 		sr_parsed = False
 		if lib['type'] == "short":
@@ -883,9 +885,6 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 			cmd += ["-l", lib['single']]
 		if lib['type'] == 'pacbio':
 			cmd += ["-l", lib['single']]
-
-	if args.no_spades_correction:
-		cmd += ["--no_correct"]
 
 	if run_external(args, cmd) is not None:
 		logger.info("Assembling finished")
