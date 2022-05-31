@@ -87,6 +87,8 @@ def parse_args():
 	reads_args.add_argument("--tadpole-correct", action="store_true",
 		help="Perform error correction of short reads with tadpole.sh from BBtools."
 		+ "SPAdes correction may be disabled with \"--no-spades-correction\".")
+	reads_args.add_argument("--bbmerge", action="store_true",
+		help="Merge overlapped paired-end reads with BBMerge.")
 	reads_args.add_argument("--bbmerge-extend", type=int,
 		help="Perform k-mer read extension by specified length "
 		+ "if initial merging wasn't succesfull.")
@@ -540,7 +542,8 @@ def read_processing(args, reads):
 		reads = tadpole_correct(args, reads, readdir)
 
 	# Merging overlapping paired-end reads
-	reads = merge_bb(args, reads, readdir)
+	if args.bbmerge:
+		reads = merge_bb(args, reads, readdir)
 
 	# Processing Illumina mate-pairs
 	if not args.no_nxtrim:

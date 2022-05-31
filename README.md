@@ -156,7 +156,7 @@ Log-file *zga.log* is available in the output folder.
 
 Perform all steps: read qc, read trimming and merging, assembly, CheckM assesment with default (bacterial) marker set, DFAST annotation and use 4 CPU threads where possible:
 
-`zga -1 R1.fastq.gz -2 R2.fastq.gz --threads 4 -o my_assembly`
+`zga -1 R1.fastq.gz -2 R2.fastq.gz --bbmerge --threads 4 -o my_assembly`
 
 Assemble with SPAdes using paired-end and nanopore reads of archaeal genome (CheckM will use archaeal markers) altering memory limit to 16 GB:
 
@@ -175,7 +175,7 @@ Assemble from Nanopore reads using unicycler:
 
 `zga -a unicycler --nanopore MiniION.fastq -o nanopore_assembly`
 
-Perform assesment and annotation of genome assembly with *Pectobacterium* CheckM marker set:
+Perform assesment and annotation of genome assembly with e.g. *Pectobacterium* CheckM marker set:
 
 `zga --first-step check_genome -g pectobacterium_sp.fasta --checkm_rank genus --checkm_taxon Pectobacterium -o my_output_dir`
 
@@ -190,8 +190,6 @@ ZGA is in the stage of active development.
 Known issues and limitations:
 
 * Unicycler can't use mate-pair reads or multiple libraries of same type.
-* Unicycler works better with SPAdes 3.12 than 3.14
-* It's not possible to install all dependencies with Python 3.8 via conda, please use 3.7 or 3.6.
 
 Don't hesitate to report bugs or features!
 
