@@ -381,9 +381,9 @@ def merge_bb(args, reads, readdir):
 		):
 			# Initial, unmerged and merged filenames
 			initial = (lib['forward'], (lib['reverse']))
-			u1 = os.path.join(readdir, f"lib{index}.u1.fq.gz")
-			u2 = os.path.join(readdir, f"lib{index}.u2.fq.gz")
-			merged = os.path.join(readdir, f"lib{index}.merged.fq.gz")
+			u1 = os.path.join(readdir, f"lib{index}.u1.fq")
+			u2 = os.path.join(readdir, f"lib{index}.u2.fq")
+			merged = os.path.join(readdir, f"lib{index}.merged.fq")
 
 			cmd = ["bbmerge.sh", f"Xmx={args.memory_limit}G", f"t={args.threads}",
 			f"in={initial[0]}", f"in2={initial[1]}",
@@ -552,6 +552,25 @@ def bbnorm(args, reads, readdir):
 	return reads
 
 
+def compress_reads(args, reads, readdir):
+	'''Compress reads with pigz or gzip after processing'''
+
+	if shutil.which('pigz') is not None:
+		cmd = ['pigz', '-p', str(args.threads)]
+	else:
+		cmd = ['gzip']
+
+	for lib in reads:
+		for k, v in lib.items():
+			f = os.path.join(readdir, v)
+			if os.path.isfile(f) and os.path.splitext(f)[-1] not in ('gz', 'bz2'):
+				logger.debug("Compressing %s", v)
+				if run_external(args, cmd + [f]) is not None:
+					lib[k] = f'{v}.gz'
+
+	return reads
+
+
 def read_processing(args, reads):
 	'''Pipeline for read processing
 
@@ -587,6 +606,8 @@ def read_processing(args, reads):
 	# Processing Illumina mate-pairs
 	if not args.no_nxtrim:
 		reads = mp_read_processing(args, reads, readdir)
+
+	reads = compress_reads(args, reads, readdir)
 
 	logger.info("Read processing finished")
 
