@@ -8,14 +8,14 @@
 
 * Wide range of supported reads: Illumina, Oxford Nanopore, PacBio, BGI.
 * Short read multi-threaded processing: QC, filtering, trimming, overlapped pairs merging.
-* Assemblies from short reads, long reads or hybrid assembly using modern and powerful assemblers: [SPAdes](http://cab.spbu.ru/software/spades/), [Unicycler](https://github.com/rrwick/Unicycler/) or [Flye](https://github.com/fenderglass/Flye).
+* Assemblies from short reads, long reads or hybrid assembly using modern and powerful assemblers: [SPAdes](http://cab.spbu.ru/software/spades/), [Unicycler](https://github.com/rrwick/Unicycler/), [Flye](https://github.com/fenderglass/Flye) or [MEGAHIT](https://github.com/voutcn/megahit).
 * Quality control of assembly: completeness and contamination assessment with [CheckM](https://github.com/Ecogenomics/CheckM) as well as PhiX detection.
 * Fast annotation of bacterial and archeal genome assemblies with [DFAST](https://github.com/nigyta/dfast_core) .
 * No High Performance Computing needed. The pipeline works on laptop or desktop.
 
 ## Installation
 
-ZGA is written in Python and tested with Python 3.6 and Python 3.7.
+ZGA is written in Python and tested with Python 3.6, 3.7 and 3.8.
 
 ### Install with conda
 
@@ -23,13 +23,13 @@ ZGA is written in Python and tested with Python 3.6 and Python 3.7.
 
 The simplest way to install ZGA and all dependencies is **conda**:
 
-1. You need to install conda, e.g. [**miniconda**](https://conda.io/en/latest/miniconda.html). Python 3.7 is preferred.
+1. You need to install conda, e.g. [**miniconda**](https://conda.io/en/latest/miniconda.html). Python 3.6 or newer is preferred.
 
 2. After installation You should add channels - the conda's software sources:  
 `conda config --add channels bioconda`  
 `conda config --add channels conda-forge`
 
-3. At the end You should install ZGA to an existing active environment (Python 3.6 or 3.7):  
+3. At the end You should install ZGA to an existing active environment (Python 3.6 - 3.8):  
 `conda install zga`  
 or create a fresh environment and activate it:  
 `conda create -n zga zga`  
@@ -60,6 +60,7 @@ ZGA uses several software and libraries including:
 * [SPAdes](http://cab.spbu.ru/software/spades/) (>= 3.12 to support merged paired-end reads, >= 3.5.0 to support Nanopore reads)
 * [Unicycler](https://github.com/rrwick/Unicycler/)
 * [Flye](https://github.com/fenderglass/Flye) >= 2.6
+* [MEGAHIT](https://github.com/voutcn/megahit)
 * [minimap2](https://github.com/lh3/minimap2/)
 * [racon](https://github.com/lbcb-sci/racon)
 * [CheckM](https://github.com/Ecogenomics/CheckM) >= 1.1.0
@@ -69,7 +70,7 @@ ZGA uses several software and libraries including:
 
 You may install all dependencies separately using **conda**. It's highly recommended to create a new conda environment:
 
-`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython"nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9"`
+`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9" megahit`
 
 and activate it
 
@@ -162,8 +163,7 @@ Assemble with SPAdes using paired-end and nanopore reads of archaeal genome (Che
 
 `zga -1 R1.fastq.gz -2 R2.fastq.gz --nanopore MiniION.fastq.gz -a spades --threads 4 --memory-limit 16 --domain archaea -o my_assembly`
 
-*(New in 0.8 development releases)* Short read correction with SPAdes is a computationally expensive step, You may run read-correction with tadpole including 
-`--tadpole-correct` option which is much faster and needs less memory.
+Short read correction with SPAdes is a computationally expensive step, You may run read-correction with tadpole including `--tadpole-correct` option which is much faster and needs less memory.
 
 `zga --tadpole-correct -1 R1.fastq.gz -2 R2.fastq.gz --threads 4 -o my_assembly`
 
@@ -210,6 +210,8 @@ Bankevich, A., Nurk, S., Antipov, D., Gurevich, A. A., Dvorkin, M., Kulikov, A. 
 Wick, R. R., Judd, L. M., Gorrie, C. L., & Holt, K. E. (2017). Unicycler: resolving bacterial genome assemblies from short and long sequencing reads. PLoS computational biology, 13(6), e1005595. https://doi.org/10.1371/journal.pcbi.1005595
 
 Vaser, R., Sović, I., Nagarajan, N., & Šikić, M. (2017). Fast and accurate de novo genome assembly from long uncorrected reads. Genome research, 27(5), 737-746. https://genome.cshlp.org/content/27/5/737.full
+
+Li, D., Liu, C-M., Luo, R., Sadakane, K., and Lam, T-W., (2015) MEGAHIT: An ultra-fast single-node solution for large and complex metagenomics assembly via succinct de Bruijn graph. Bioinformatics, doi: 10.1093/bioinformatics/btv033 https://doi.org/10.1093/bioinformatics/btv033
 
 Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics, 34:3094-3100. https://dx.doi.org/10.1093/bioinformatics/bty191
 
