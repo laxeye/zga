@@ -10,14 +10,18 @@ import hashlib
 import json
 from Bio import SeqIO
 from zga import __version__
+from zga.assemblers import assemble
 
 
 def parse_args():
 	'''Returns argparse.Namespace'''
 	parser = argparse.ArgumentParser(prog="zga",
 		description=f"ZGA genome assembly and annotation pipeline ver. {__version__}")
-	zga_steps = ["readqc", "processing", "assembling", "polishing", "check_genome", "annotation"]
-	general_args = parser.add_argument_group(title="General options", description="")
+	zga_steps = [
+		"readqc", "processing", "assembling",
+		"polishing", "check_genome", "annotation"]
+	general_args = parser.add_argument_group(
+		title="General options", description="")
 	general_args.add_argument("-s", "--first-step",
 		choices=zga_steps, default="readqc",
 		help="First step of the pipeline. Default: readqc")
@@ -54,9 +58,11 @@ def parse_args():
 		+ "e.g. -1 Monday.R1.fq Friday.R1.fq -2 Monday.R2.fq Friday.R2.fq "
 		+ "--pe-merged n/a Friday.merged.fq")
 	input_args.add_argument("-1", "--pe-1", nargs='+',
-		help="FASTQ file(s) with first (left) paired-end reads. Space-separated if multiple.")
+		help="FASTQ file(s) with first (left) paired-end reads. "
+		+ "Space-separated if multiple.")
 	input_args.add_argument("-2", "--pe-2", nargs='+',
-		help="FASTQ file(s) with second (right) paired-end reads. Space-separated if multiple.")
+		help="FASTQ file(s) with second (right) paired-end reads. "
+		+ "Space-separated if multiple.")
 	input_args.add_argument("--pe-merged", nargs='+',
 		help="FASTQ file(s) with merged overlapped paired-end reads")
 	input_args.add_argument("-S", "--single-end", nargs='+',
@@ -78,7 +84,8 @@ def parse_args():
 		help="Adapter sequences for short reads trimming (FASTA). "
 		+ "By default Illumina and BGI adapter sequences are used.")
 	reads_args.add_argument("--filter-by-tile", action="store_true",
-		help="Filter short reads based on positional quality over a flowcell.")
+		help="Filter short reads (Illumina only!) "
+		+ "based on positional quality over a flowcell.")
 	reads_args.add_argument("--min-short-read-length", type=int, default=33,
 		help="Minimum short read length to keep after quality trimming.")
 	reads_args.add_argument("--entropy-cutoff", type=float, default=-1,
@@ -106,17 +113,20 @@ def parse_args():
 		help="Minimum copies of each k-mer to include in size estimation")
 	# Mate pair read processing
 	reads_args.add_argument("--use-unknown-mp", action="store_true",
-		help="NxTrim: Include reads that are probably mate pairs (default: only known MP used)")
+		help="NxTrim: Include reads that are probably mate pairs "
+		+ "(default: only known mate pairs used)")
 	reads_args.add_argument("--no-nxtrim", action="store_true",
 		help="Don't process mate-pair reads with NxTrim. Usefull for preprocessed reads")
 
 	asly_args = parser.add_argument_group(title="Assembly settings")
 	asly_args.add_argument("-a", "--assembler",
-		default="unicycler", choices=["spades", "unicycler", "flye"],
-		help="Assembler: unicycler (default; better quality)"
-		+ ", spades (faster, may use mate-pair reads) or Flye (long reads only).")
+		default="unicycler", choices=["spades", "unicycler", "flye", "megahit"],
+		help="Assembler: Unicycler (default; better quality), "
+		+ "SPAdes (faster, may use mate-pair reads), "
+		+ "Flye (long reads only with short-reads polishing), "
+		+ "MEGAHIT (short reads only).")
 	asly_args.add_argument("--no-spades-correction", action="store_true",
-		help="Disable short read correction by SPAdes (works for SPAdes and unicycler).")
+		help="Disable short read correction by SPAdes.")
 	# Spades options
 	asly_args.add_argument("--use-scaffolds", action="store_true",
 		help="SPAdes: Use assembled scaffolds. Contigs are used by default.")
@@ -756,224 +766,6 @@ def racon_polish(args, assembly, reads) -> str:
 	return assembly
 
 
-def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
-	'''Assemble genome with Flye using long reads
-
-	Returns:
-	assembly (str) : path to genome assembly
-	'''
-	if bool(estimated_genome_size) is False:
-		logger.critical("Impossible to run flye without genome size estimation!")
-		sys.exit(1)
-
-	cmd = ["flye", "-o", aslydir,
-		"-g", str(estimated_genome_size),
-		"-t", str(args.threads)]
-
-	types = [x["type"] for x in reads]
-	if "nanopore" in types:
-		long_reads = "nanopore"
-		flye_key = "--nano-raw"
-	elif "pacbio" in types:
-		long_reads = "pacbio"
-		flye_key = "--pacbio-raw"
-	else:
-		raise Exception("No long reads provided for Flye")
-
-	reads = [x['single'] for x in reads if x['type'] == long_reads]
-	cmd += [flye_key, *reads]
-
-	if args.flye_skip_long_polish:
-		cmd += ["--stop-after", "contigger"]
-
-	if run_external(args, cmd) is not None:
-		logger.debug("Assembling finished")
-		if args.flye_skip_long_polish:
-			assembly = os.path.join(aslydir, "30-contigger/contigs.fasta")
-		else:
-			assembly = os.path.join(aslydir, "assembly.fasta")
-		return assembly
-	else:
-		logger.error("Genome assembly finished with errors.")
-		logger.critical("Plese check %s for more information.", os.path.join(aslydir, "flye.log"))
-		raise Exception("Extermal software error")
-
-
-def get_spades_version() -> str:
-	'''Returns SPAdes version'''
-	try:
-		spades_stdout = str(subprocess.run(["spades.py", "-v"],
-			stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-			universal_newlines=True).stdout)
-		spades_version = re.search(r'[\d\.]+', spades_stdout)[0]
-		return spades_version
-	except Exception as e:
-		logger.critical("Failed to run SPAdes!")
-		raise e
-
-
-def spades_assemble(args, reads, aslydir) -> str:
-	'''Performs genome assembly with SPAdes.
-
-	Returns:
-	assembly (str) : path to genome assembly
-	'''
-	cmd = ["spades.py", "-o", aslydir, "--careful", "-t", str(args.threads),
-		"--cov-cutoff", "auto", "-m", str(args.memory_limit)]
-
-	spades_version = get_spades_version()
-	logger.debug("SPAdes version: %s", spades_version)
-	''' Possible use of version:
-	v_major = int(spades_version.split(".")[0])
-	v_minor = int(spades_version.split(".")[1])
-
-	I'm not sure is it worth to use this mode...
-	if v_major > 3 or (v_major >= 3 and v_minor >= 14):
-		cmd += ['--isolate']
-	else:
-		cmd += ['--careful']
-	'''
-
-	for index, lib in enumerate(reads, start=1):
-		if lib['type'] == "short":
-			if "forward" in lib.keys() and "reverse" in lib.keys():
-				cmd += [f"--pe{index}-1", lib['forward'],
-					f"--pe{index}-2", lib['reverse']]
-			if "merged" in lib.keys():
-				cmd += [f"--pe{index}-m", lib['merged']]
-			if "single" in lib.keys():
-				cmd += [f"--pe{index}-s", lib['single']]
-		if lib['type'] == 'mate-pair':
-			cmd += [f"--mp{index}-1", lib['forward'],
-				f"--mp{index}-2", lib['reverse']]
-		if lib['type'] == 'nanopore':
-			cmd += ["--nanopore", lib['single']]
-		if lib['type'] == 'pacbio':
-			cmd += ["--pacbio", lib['single']]
-
-	if args.no_spades_correction:
-		cmd += ["--only-assembler"]
-	if args.spades_k_list:
-		cmd += ["-k", args.spades_k_list]
-
-	if run_external(args, cmd) is not None:
-		logger.debug("Assembling finished")
-		if args.use_scaffolds:
-			return os.path.join(aslydir, "scaffolds.fasta")
-		else:
-			return os.path.join(aslydir, "contigs.fasta")
-	else:
-		logger.error("Genome assembly finished with errors.")
-		logger.error("Plese check %s for more information.",
-			os.path.join(aslydir, "spades.log"))
-		raise Exception("Extermal software error")
-
-
-def unicycler_assemble(args, reads, aslydir) -> str:
-	'''Performs genome assembly with Unicycler.
-
-	Returns:
-	assembly (str) : path to assembled genome
-	'''
-	try:
-		version_stdout = subprocess.run(
-			["unicycler", "--version"], encoding="utf-8",
-			stderr=subprocess.PIPE, stdout=subprocess.PIPE
-		).stdout
-		version = re.search(r'v(\d\S*)', version_stdout)[1]
-		logger.debug("Unicycler version %s available.", version)
-	except Exception as e:
-		logger.critical("Failed to run Unicycler!")
-		raise e
-
-	cmd = ["unicycler", "-o", aslydir, "-t", str(args.threads),
-		"--mode", args.unicycler_mode,
-		"--spades_options", f'"--memory {args.memory_limit}"']
-
-	for lib in reads:
-		sr_parsed = False
-		if lib['type'] == "short":
-			if sr_parsed:
-				continue
-			if "forward" in lib.keys() and "reverse" in lib.keys():
-				cmd += ["-1", lib['forward'], "-2", lib['reverse']]
-			if "merged" in lib.keys():
-				cmd += ["-s", lib['merged']]
-			elif "single" in lib.keys():
-				cmd += ["-s", lib['single']]
-			sr_parsed = True
-		if lib['type'] == 'nanopore':
-			cmd += ["-l", lib['single']]
-		if lib['type'] == 'pacbio':
-			cmd += ["-l", lib['single']]
-
-	if run_external(args, cmd) is not None:
-		logger.info("Assembling finished")
-		assembly = os.path.join(aslydir, "assembly.fasta")
-		if args.extract_replicons:
-			extract_replicons(args, aslydir)
-		return assembly
-	else:
-		logger.error("Genome assembly finished with errors.")
-		logger.error("Plese check %s for more information.",
-			os.path.join(aslydir, "unicycler.log"))
-		raise Exception("Extermal software error")
-
-
-def assemble(args, reads, estimated_genome_size) -> str:
-	'''Returns path to assembled genome'''
-	logger.info("Assembling started")
-	aslydir = os.path.join(args.output_dir, "assembly")
-
-	if args.assembler == "flye":
-		assembly = flye_assemble(args, reads, estimated_genome_size, aslydir)
-	elif args.assembler == "spades":
-		assembly = spades_assemble(args, reads, aslydir)
-	elif args.assembler == "unicycler":
-		assembly = unicycler_assemble(args, reads, aslydir)
-	else:
-		logger.critical("Not yet implemented")
-		raise Exception("Unknown option for assembly")
-
-	stats = assembly_stats(assembly)
-	logger.info("Assembly length: %s", stats['Total length'])
-	logger.info("Contig count: %s", stats['Sequence count'])
-	logger.info("N50: %s", stats['N50'])
-	write_assembly_stats(args, stats, prefix=args.assembler, s_format="table")
-
-	return assembly
-
-
-def extract_replicons(args, aslydir) -> int:
-	'''Extracts complete replicons from short read assemblies.
-
-	Unicycler log is not universal for different input files.
-	Current implementation works only for short read based assemblies.
-
-	Returns number of extracted replicons.
-	'''
-	logfile = os.path.join(aslydir, "unicycler.log")
-	assemblyfile = os.path.join(aslydir, "assembly.fasta")
-	with open(logfile, "r") as log:
-		regexp = re.compile(r'\s?\d+.+\scomplete')
-		repl_lengths = []
-		for line in log.readlines():
-			if regexp.search(line):
-				_, segments, _, length, _, _, _ = line.split()
-				if int(segments) == 1:
-					repl_lengths.append(int(length.replace(",", "")))
-		if len(repl_lengths) == 0:
-			logger.info("No complete replicons found.")
-			return 0
-		with open(assemblyfile, "r") as assembly:
-			replicons = [x for x in SeqIO.parse(assembly, "fasta") if len(x) in repl_lengths]
-			for n, replicon in enumerate(replicons, start=1):
-				with open(os.path.join(aslydir, f"replicon.{n}.fasta"), "w") as F:
-					SeqIO.write(replicon, F, "fasta")
-			logger.info("Extracted %s replicon(s).", str(len(repl_lengths)))
-			return len(replicons)
-
-
 def locus_tag_gen(genome) -> str:
 	'''Returns a six letter locus tag generated from MD5 of genome assembly'''
 	logger.info("No locus tag provided. Generating it as MD5 hash of genome")
@@ -1274,6 +1066,12 @@ def main():
 		else:
 			estimated_genome_size = args.genome_size_estimation
 		args.genome = assemble(args, reads, estimated_genome_size)
+		stats = assembly_stats(args.genome)
+		logger.info("Assembly length: %s", stats['Total length'])
+		logger.info("Contig count: %s", stats['Sequence count'])
+		logger.info("N50: %s", stats['N50'])
+		write_assembly_stats(args, stats, prefix=args.assembler, s_format="table")
+
 		check_last_step(args, 3)
 
 	# Short read polishing is only meaningful for flye assembly
