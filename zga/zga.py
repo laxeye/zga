@@ -91,6 +91,8 @@ def parse_args():
 	reads_args.add_argument("--entropy-cutoff", type=float, default=-1,
 		help="Set between 0 and 1 to filter reads with entropy below "
 		+ "that value. Higher is more stringent. Default = -1, filtering disabled.")
+	reads_args.add_argument("--bbduk-extra", nargs='*',
+		help="Extra options for BBduk. Should be space-separated.")
 	reads_args.add_argument("--tadpole-correct", action="store_true",
 		help="Perform error correction of short reads with tadpole.sh from BBtools."
 		+ "SPAdes correction may be disabled with \"--no-spades-correction\".")
@@ -399,7 +401,7 @@ def merge_bb(args, reads, readdir):
 			f"in={initial[0]}", f"in2={initial[1]}",
 			f"outu1={u1}", f"outu2={u2}", f"out={merged}"]
 
-			if args.bbmerge_extend:
+			if args.bbmerge_extend or bbmerge_extend_kmer:
 				cmd += [f"extend2={args.bbmerge_extend}",
 				f"k={args.bbmerge_extend_kmer}", "rsem=t"]
 			else:
@@ -444,6 +446,8 @@ def bbduk_process(args, reads, readdir):
 			"qtrim=r", f"trimq={args.quality_cutoff}",
 			f"entropy={args.entropy_cutoff}",
 			f"minlength={args.min_short_read_length}"]
+	if args.bbduk_extra:
+		precmd += bbduk_extra
 
 	for index, lib in enumerate(
 		[lib for lib in reads if lib["type"] == "short"],
@@ -610,7 +614,7 @@ def read_processing(args, reads):
 		reads = bbnorm(args, reads, readdir)
 
 	# Merging overlapping paired-end reads
-	if args.bbmerge:
+	if args.bbmerge or args.bbmerge_trim or bbmerge_extend:
 		reads = merge_bb(args, reads, readdir)
 
 	# Processing Illumina mate-pairs

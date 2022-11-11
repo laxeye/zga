@@ -1,3 +1,6 @@
+'''This module runs genome assembling with one of four assemblers:
+Flye, Unicycler, SPAdes or MEGAHIT
+'''
 import logging
 import os.path
 import re
@@ -16,10 +19,11 @@ def get_assembler_version(assembler):
 	try:
 		version_stdout = subprocess.run(
 			[assembler, "--version"], encoding="utf-8",
-			stderr=subprocess.PIPE, stdout=subprocess.PIPE
+			stderr=subprocess.PIPE, stdout=subprocess.PIPE, check=True
 		).stdout
 		version = re.search(r'v(\d\S*)', version_stdout)[1]
 		logger.debug("%s version %s available.", assembler, version)
+		return version
 	except Exception as e:
 		logger.critical("Failed to run %s!", assembler)
 		raise e
@@ -65,11 +69,8 @@ def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
 		else:
 			assembly = os.path.join(aslydir, "assembly.fasta")
 		return assembly
-	else:
-		logger.error("Genome assembly finished with errors.")
-		logger.critical("Plese check %s for more information.",
-			os.path.join(aslydir, "flye.log"))
-		raise Exception("Extermal software error")
+
+	return assembler_failed(aslydir, "flye.log")
 
 
 def spades_assemble(args, reads, aslydir) -> str:
@@ -118,13 +119,9 @@ def spades_assemble(args, reads, aslydir) -> str:
 		logger.debug("Assembling with SPAdes %s finished", version)
 		if args.use_scaffolds:
 			return os.path.join(aslydir, "scaffolds.fasta")
-		else:
-			return os.path.join(aslydir, "contigs.fasta")
-	else:
-		logger.error("Genome assembly finished with errors.")
-		logger.error("Plese check %s for more information.",
-			os.path.join(aslydir, "spades.log"))
-		raise Exception("Extermal software error")
+		return os.path.join(aslydir, "contigs.fasta")
+
+	return assembler_failed(aslydir, "spades.log")
 
 
 def unicycler_assemble(args, reads, aslydir) -> str:
@@ -162,16 +159,13 @@ def unicycler_assemble(args, reads, aslydir) -> str:
 		logger.info("Assembling with Unicycler %s finished", version)
 		assembly = os.path.join(aslydir, "assembly.fasta")
 		if args.extract_replicons:
-			extract_replicons(args, aslydir)
+			extract_replicons(aslydir)
 		return assembly
-	else:
-		logger.error("Genome assembly finished with errors.")
-		logger.error("Plese check %s for more information.",
-			os.path.join(aslydir, "unicycler.log"))
-		raise Exception("Extermal software error")
+
+	return assembler_failed(aslydir, "unicycler.log")
 
 
-def extract_replicons(args, aslydir) -> int:
+def extract_replicons(aslydir) -> int:
 	'''Extracts complete replicons from short read assemblies.
 
 	Unicycler log is not universal for different input files.
@@ -240,11 +234,17 @@ def megahit_assemble(args, reads, aslydir) -> str:
 	if run_external(args, cmd) is not None:
 		logger.debug("Assembling with MEGAHIT %s finished", version)
 		return os.path.join(aslydir, "final.contigs.fa")
-	else:
-		logger.error("Genome assembly finished with errors.")
-		logger.error("Plese check %s for more information.",
-			os.path.join(aslydir, "log"))
-		raise Exception("Extermal software error")
+
+	return assembler_failed(aslydir, "log")
+
+
+def assembler_failed(aslydir, logfile):
+	'''Logs assembler's fail and raises an exception'''
+	logger = logging.getLogger("main")
+	logger.error("Genome assembly finished with errors.")
+	logger.error("Plese check %s for more information.",
+		os.path.join(aslydir, logfile))
+	raise Exception("External software error")
 
 
 def assemble(args, reads, estimated_genome_size) -> str:

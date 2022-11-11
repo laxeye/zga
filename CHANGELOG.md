@@ -1,12 +1,13 @@
 ### ZGA changelog
 
-**0.1a**
+**0.1b**
 
 + Short reads normalization by k-mer count (BBnorm)
 + Processed reads are compressed with pigz (if installed) or gzip, while intermediate still in plain FASTQ
 + Providing custom configuration to DFAST
 + Dockerfile added. Warning: the image takes about 8 GB :(
 * Merging of paired-end reads (BBmerge) is now optional
++ BBduk extra options
 
 **0.0.9**
 
