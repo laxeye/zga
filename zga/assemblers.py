@@ -1,11 +1,12 @@
 '''This module runs genome assembling with one of four assemblers:
 Flye, Unicycler, SPAdes or MEGAHIT
 '''
+import json
 import logging
 import os.path
 import re
-import sys
 import subprocess
+import sys
 
 from Bio import SeqIO
 from zga.essential import run_external
@@ -24,9 +25,9 @@ def get_assembler_version(assembler):
 		version = re.search(r'v(\d\S*)', version_stdout)[1]
 		logger.debug("%s version %s available.", assembler, version)
 		return version
-	except Exception as e:
+	except Exception as ex:
 		logger.critical("Failed to run %s!", assembler)
-		raise e
+		raise ex
 
 
 def flye_assemble(args, reads, estimated_genome_size, aslydir) -> str:
@@ -190,9 +191,9 @@ def extract_replicons(aslydir) -> int:
 		with open(assemblyfile, "r") as assembly:
 			contigs = SeqIO.parse(assembly, "fasta")
 			replicons = [x for x in contigs if len(x) in repl_lengths]
-			for n, replicon in enumerate(replicons, start=1):
-				with open(os.path.join(aslydir, f"replicon.{n}.fasta"), "w") as F:
-					SeqIO.write(replicon, F, "fasta")
+			for i, replicon in enumerate(replicons, start=1):
+				with open(os.path.join(aslydir, f"replicon.{i}.fasta"), "w") as repl_file:
+					SeqIO.write(replicon, repl_file, "fasta")
 			logger.info("Extracted %s replicon(s).", str(len(repl_lengths)))
 			return len(replicons)
 
@@ -247,6 +248,50 @@ def assembler_failed(aslydir, logfile):
 	raise Exception("External software error")
 
 
+def get_nx_lx_metric(lengths, value=50):
+	'''Returns a tuple containing NX and LX metric'''
+	l_total = sum(lengths)
+	metric = 0.01 * value
+	l_sum = 0
+	for i, len_i in enumerate(lengths, 1):
+		l_sum += len_i
+		if l_sum >= l_total * metric:
+			return i, len_i
+	raise Exception("Error during assembly statistics calculation.")
+
+
+def assembly_stats(genome):
+	'''Returns a dict containing genome stats'''
+	seq_records = SeqIO.parse(genome, "fasta")
+	lengths = sorted([len(x.seq) for x in seq_records], reverse=True)
+	stats = {
+		'Sequence count': len(lengths),
+		'Total length': sum(lengths),
+		'Max length': lengths[0]
+	}
+	stats['N50'], stats['L50'] = get_nx_lx_metric(lengths, 50)
+	stats['N90'], stats['L90'] = get_nx_lx_metric(lengths, 90)
+	return stats
+
+
+def write_assembly_stats(args, stats, prefix, s_format="human"):
+	'''Write assembly stats to a file'''
+	ext_dict = {"human": "txt", "json": "json", "table": "tsv"}
+	filename = f"{prefix}.assembly.{ext_dict[s_format]}"
+	with open(os.path.join(args.output_dir, filename), 'w') as dest:
+		if s_format == "human":
+			for k, v in stats.items():
+				print(f"{k}\t{v}", file=dest)
+		if s_format == "json":
+			print(json.dumps(stats), file=dest)
+		if s_format == "table":
+			header = "\t".join(stats.keys())
+			data = "\t".join(list(map(str, stats.values())))
+			print(f"#{header}", file=dest)
+			print(f"{data}", file=dest)
+	return filename
+
+
 def assemble(args, reads, estimated_genome_size) -> str:
 	'''Returns path to assembled genome'''
 	logger = logging.getLogger("main")
@@ -264,5 +309,11 @@ def assemble(args, reads, estimated_genome_size) -> str:
 	else:
 		logger.critical("Not yet implemented")
 		raise Exception("Unknown option for assembly")
+
+	stats = assembly_stats(assembly)
+	logger.info("Assembly length: %s", stats['Total length'])
+	logger.info("Contig count: %s", stats['Sequence count'])
+	logger.info("N50: %s", stats['N50'])
+	write_assembly_stats(args, stats, prefix=args.assembler, s_format="table")
 
 	return assembly
