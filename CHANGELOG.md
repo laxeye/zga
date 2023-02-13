@@ -1,6 +1,6 @@
 ### ZGA changelog
 
-**0.1**
+**0.1.0**
 
 + Short reads normalization by k-mer count (BBNorm)
 + Processed reads are compressed with pigz (if installed) or gzip, while intermediate still in plain FASTQ

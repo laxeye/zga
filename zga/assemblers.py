@@ -280,8 +280,8 @@ def write_assembly_stats(args, stats, prefix, s_format="human"):
 	filename = f"{prefix}.assembly.{ext_dict[s_format]}"
 	with open(os.path.join(args.output_dir, filename), 'w') as dest:
 		if s_format == "human":
-			for k, v in stats.items():
-				print(f"{k}\t{v}", file=dest)
+			for k, value in stats.items():
+				print(f"{k}\t{value}", file=dest)
 		if s_format == "json":
 			print(json.dumps(stats), file=dest)
 		if s_format == "table":

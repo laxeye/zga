@@ -242,7 +242,7 @@ def check_reads(args):
 		for f_name in reads:
 			if f_name != "n/a" and not os.path.isfile(f_name):
 				logger.error("File %s doesn't exist", f_name)
-				raise FileNotFoundError("File %s doesn't exist" % f_name)
+				raise FileNotFoundError(f"File {f_name} doesn't exist")
 
 	short_libs = {}
 	if args.pe_1 and args.pe_2:
@@ -588,9 +588,8 @@ def run_checkm(args):
 
 	if r:
 		return checkm_outfile
-	else:
-		logger.error("CheckM didn't finish properly.")
-		return None
+	logger.error("CheckM didn't finish properly.")
+	return None
 
 
 def check_last_step(args, step):
