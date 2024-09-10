@@ -4,5 +4,6 @@ channels:
    - bioconda
 dependencies:
    - python>=3.6
+   - spades>=3.15.4
    - checkm-genome
    - zga
