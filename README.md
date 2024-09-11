@@ -1,7 +1,7 @@
 # ZGA - prokaryotic genome assembly and annotation pipeline
 
 [![version status](https://img.shields.io/pypi/v/zga.svg)](https://pypi.python.org/pypi/zga)
-[![Anaconda Cloud](https://anaconda.org/bioconda/zga/badges/installer/conda.svg)](https://anaconda.org/bioconda/zga/)
+[![Anaconda Cloud](https://anaconda.org/bioconda/zga/badges/version.svg)](https://anaconda.org/bioconda/zga/)
 [![Publication](https://img.shields.io/badge/DOI-published-green.svg)](https://dx.doi.org/10.1101/2021.04.27.441618)
 
 ## Main Features
@@ -10,12 +10,12 @@
 * Short read multi-threaded processing: QC, filtering, trimming, overlapped pairs merging.
 * Assemblies from short reads, long reads or hybrid assembly using modern and powerful assemblers: [SPAdes](http://cab.spbu.ru/software/spades/), [Unicycler](https://github.com/rrwick/Unicycler/), [Flye](https://github.com/fenderglass/Flye) or [MEGAHIT](https://github.com/voutcn/megahit).
 * Quality control of assembly: completeness and contamination assessment with [CheckM](https://github.com/Ecogenomics/CheckM) as well as PhiX detection.
-* Fast annotation of bacterial and archeal genome assemblies with [DFAST](https://github.com/nigyta/dfast_core) .
+* Fast annotation of bacterial and archeal genome assemblies with [bakta](https://github.com/oschwengers/bakta).
 * No High Performance Computing needed. The pipeline works on laptop or desktop.
 
 ## Installation
 
-ZGA is written in Python and tested with Python 3.6, 3.7 and 3.8.
+ZGA is written in Python and tested with Python 3.8 - 3.10.
 
 ### Install with conda
 
@@ -23,13 +23,13 @@ ZGA is written in Python and tested with Python 3.6, 3.7 and 3.8.
 
 The simplest way to install ZGA and all dependencies is **conda**:
 
-1. You need to install conda, e.g. [**miniconda**](https://conda.io/en/latest/miniconda.html). Python 3.6 or newer is preferred.
+1. You need to install conda, e.g. [**miniconda**](https://conda.io/en/latest/miniconda.html). Python 3.8 or newer is preferred.
 
 2. After installation You should add channels - the conda's software sources:  
 `conda config --add channels bioconda`  
 `conda config --add channels conda-forge`
 
-3. At the end You should install ZGA to an existing active environment (Python 3.6 - 3.8):  
+3. At the end You should install ZGA to an existing active environment (Python 3.8+):  
 `conda install zga`  
 or create a fresh environment and activate it:  
 `conda create -n zga zga`  
@@ -63,14 +63,14 @@ ZGA uses several software and libraries including:
 * [MEGAHIT](https://github.com/voutcn/megahit)
 * [minimap2](https://github.com/lh3/minimap2/)
 * [racon](https://github.com/lbcb-sci/racon)
-* [CheckM](https://github.com/Ecogenomics/CheckM) >= 1.1.0
+* [CheckM](https://github.com/Ecogenomics/CheckM) >= 1.2.1
 * [BioPython](https://biopython.org/)
 * [NCBI BLAST+](https://blast.ncbi.nlm.nih.gov/Blast.cgi)
-* [DFAST](https://github.com/nigyta/dfast_core)
+* [bakta](https://github.com/oschwengers/bakta)
 
 You may install all dependencies separately using **conda**. It's highly recommended to create a new conda environment:
 
-`conda create -n zga "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9" megahit`
+`conda create -n zga "python>=3.8" fastp "spades>=3.12" unicycler checkm-genome bakta bbmap blast biopython nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9" megahit`
 
 and activate it
 
@@ -78,25 +78,20 @@ and activate it
 
 Otherwise you may install dependencies to existing conda environment:
 
-`conda install "python>=3.6" fastp "spades>=3.12" unicycler checkm-genome dfast bbmap blast biopython nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9"`
+`conda install "python>=3.8" fastp "spades>=3.12" unicycler checkm-genome bakta bbmap blast biopython nxtrim "mash>=2" flye minimap2 racon "samtools>=1.9" megahit`
 
 Of course, it's possible to use *another ways* even compile all tools from source code. In this case you should check if binaries are in your '$PATH' variable.
 
-#### DFAST database download
+#### bakta database download
 
-After installation DFAST downloads some basic databases. It's recommended to download more databases using *dfast_file_downloader.py* command-line script:
+After installation you need to download bakta database, please read [detailed instructions](https://github.com/oschwengers/bakta?tab=readme-ov-file#database-download). Shortly you need to run:
 
-Run `dfast_file_downloader.py -h` to see available databases and options.
+`bakta_db download --output <output-path> --type [light|full]`
 
-Default databases may be donloaded with `dfast_file_downloader.py --protein dfast --cdd Cog --hmm TIGR`
-
-Soon auto-download of databases during installation with conda will be available.
-
-If You want to use more databases You need to edit DFAST configuration file and provide it to ZGA with `--dfast-config` option.
 
 ### Operating systems requirements
 
-ZGA was tested on Ubuntu 18.04, 19.10 and 20.04. Most probably any modern 64-bit Linux distribuition is suitable.
+ZGA was tested on Ubuntu 18.04, 19.10, 20.04, 22.04 and EndeavourOS. Most probably any modern 64-bit Linux distribuition is suitable.
 
 Your feedback on other OS is welcome!
 
@@ -155,7 +150,7 @@ Log-file *zga.log* is available in the output folder.
 
 ### Usage examples
 
-Perform all steps: read qc, read trimming and merging, assembly, CheckM assesment with default (bacterial) marker set, DFAST annotation and use 4 CPU threads where possible:
+Perform all steps: read qc, read trimming and merging, assembly, CheckM assesment with default (bacterial) marker set, bakta annotation and use 4 CPU threads where possible:
 
 `zga -1 R1.fastq.gz -2 R2.fastq.gz --bbmerge --threads 4 -o my_assembly`
 
@@ -205,7 +200,7 @@ Chen, S., Zhou, Y., Chen, Y., & Gu, J. (2018). fastp: an ultra-fast all-in-one F
 
 Bushnell, B., Rood, J., & Singer, E. (2017). BBMerge–accurate paired shotgun read merging via overlap. PloS one, 12(10). https://doi.org/10.1371/journal.pone.0185056
 
-Bankevich, A., Nurk, S., Antipov, D., Gurevich, A. A., Dvorkin, M., Kulikov, A. S., ... & Pyshkin, A. V. (2012). SPAdes: a new genome assembly algorithm and its applications to single-cell sequencing. Journal of computational biology, 19(5), 455-477. https://dx.doi.org/10.1089%2Fcmb.2012.0021
+Bankevich, A., Nurk, S., Antipov, D., Gurevich, A. A., Dvorkin, M., Kulikov, A. S., ... & Pyshkin, A. V. (2012). SPAdes: a new genome assembly algorithm and its applications to single-cell sequencing. Journal of computational biology, 19(5), 455-477. https://dx.doi.org/10.1089/cmb.2012.0021
 
 Wick, R. R., Judd, L. M., Gorrie, C. L., & Holt, K. E. (2017). Unicycler: resolving bacterial genome assemblies from short and long sequencing reads. PLoS computational biology, 13(6), e1005595. https://doi.org/10.1371/journal.pcbi.1005595
 
@@ -217,9 +212,10 @@ Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences. Bioinforma
 
 Kolmogorov, M., Yuan, J., Lin, Y., & Pevzner, P. A. (2019). Assembly of long, error-prone reads using repeat graphs. Nature biotechnology, 37(5), 540-546. https://doi.org/10.1038/s41587-019-0072-8
 
-Parks, D. H., Imelfort, M., Skennerton, C. T., Hugenholtz, P., & Tyson, G. W. (2015). CheckM: assessing the quality of microbial genomes recovered from isolates, single cells, and metagenomes. Genome research, 25(7), 1043-1055. https://dx.doi.org/10.1101%2Fgr.186072.114
+Parks, D. H., Imelfort, M., Skennerton, C. T., Hugenholtz, P., & Tyson, G. W. (2015). CheckM: assessing the quality of microbial genomes recovered from isolates, single cells, and metagenomes. Genome research, 25(7), 1043-1055. https://dx.doi.org/10.1101/gr.186072.114
 
-Tanizawa, Y., Fujisawa, T., & Nakamura, Y. (2018). DFAST: a flexible prokaryotic genome annotation pipeline for faster genome publication. Bioinformatics, 34(6), 1037-1039. https://dx.doi.org/10.1093%2Fbioinformatics%2Fbtx713
+Schwengers O., Jelonek L., Dieckmann M. A., Beyvers S., Blom J., Goesmann A. (2021). Bakta: rapid and standardized annotation of bacterial genomes via alignment-free sequence identification. Microbial Genomics, 7(11). https://doi.org/10.1099/mgen.0.000685
+
 
 Camacho, C., Coulouris, G., Avagyan, V. et al. (2009). BLAST+: architecture and applications. BMC Bioinformatics 10, 421. https://doi.org/10.1186/1471-2105-10-421
 

@@ -8,10 +8,12 @@ import subprocess
 import re
 import hashlib
 from Bio import SeqIO
+from pathlib import Path
 from zga import __version__
 from zga.assemblers import assemble
 from zga.essential import run_external, create_subdir
 from zga.preprocessing import read_processing
+
 
 def parse_args():
 	'''Returns argparse.Namespace'''
@@ -32,21 +34,21 @@ def parse_args():
 		help="Output directory")
 	general_args.add_argument("--force", action="store_true",
 		help="Overwrite output directory if exists")
-	general_args.add_argument("-t", "--threads", type=int, default=1,
-		help="Number of CPU threads to use (where possible)")
+	general_args.add_argument("-t", "--threads", type=int, default=4,
+		help="Number of CPU threads to use (where possible), default: 4.")
 	general_args.add_argument("-m", "--memory-limit", type=int, default=8,
-		help="Memory limit in GB (default 8)")
+		help="Memory limit in GB, default: 8.")
 	general_args.add_argument("--genus", default="Unknown",
-		help="Provide genus if known")
+		help="Genus name if known, default: 'Unknown'.")
 	general_args.add_argument("--species", default="sp.",
-		help="Provide species if known")
+		help="Species name if known, , default: 'sp.'")
 	general_args.add_argument("--strain",
-		help="Provide strain if known")
+		help="Strain name if known")
 	general_args.add_argument("--transparent", action="store_true",
 		help="Show output from tools inside the pipeline")
 	general_args.add_argument("--domain",
-		default="bacteria", choices=['archaea', 'bacteria'],
-		help="Provide prokaryotic domain: bacteria or archaea")
+		default="Bacteria", choices=['Archaea', 'Bacteria'],
+		help="Prokaryotic domain: Bacteria or Archaea, default: Bacteria.")
 	parser.add_argument("-V", "--version",
 		action="version", version=f"ZGA ver. {__version__}")
 
@@ -92,7 +94,7 @@ def parse_args():
 		help="Set between 0 and 1 to filter reads with entropy below "
 		+ "that value. Higher is more stringent. Default = -1, filtering disabled.")
 	reads_args.add_argument("--bbduk-k", type=int, default=19,
-		help="Kmer length used for finding contaminants with BBduk. [19]")
+		help="Kmer length used for finding contaminants with BBduk.")
 	reads_args.add_argument("--bbduk-extra", nargs='*',
 		help="Extra options for BBduk. Should be space-separated.")
 	reads_args.add_argument("--tadpole-correct", action="store_true",
@@ -109,7 +111,7 @@ def parse_args():
 	reads_args.add_argument("--genome-size-estimation", type=int,
 		help="Genome size in bp (no K/M suffix supported) for Flye assembler, if known.")
 	reads_args.add_argument("--mash-kmer-copies", type=int, default=10,
-		help="Minimum copies of each k-mer to include in size estimation")
+		help="Minimum copies of each k-mer to include in size estimation, default: 10.")
 	# Mate pair read processing
 	reads_args.add_argument("--use-unknown-mp", action="store_true",
 		help="NxTrim: Include reads that are probably mate pairs "
@@ -148,7 +150,7 @@ def parse_args():
 	asly_args.add_argument("--perform-polishing", action="store_true",
 		help="Perform polishing. Useful only for flye assembly of long reads and short reads available.")
 	asly_args.add_argument("--polishing-iterations", default=1, type=int,
-		help="Number of polishing iterations.")
+		help="Number of polishing iterations, default: 1.")
 
 	check_args = parser.add_argument_group(title="Genome check settings")
 	# phiX
@@ -157,7 +159,7 @@ def parse_args():
 	# CheckM
 	check_args.add_argument("--checkm-mode",
 		default="taxonomy_wf", choices=['taxonomy_wf', 'lineage_wf'],
-		help="Select CheckM working mode. Default is checking for domain-specific marker-set.")
+		help="CheckM working mode. Default is checking for domain-specific marker-set.")
 	check_args.add_argument("--checkm-rank",
 		help="Rank of taxon for CheckM. Run 'checkm taxon_list' for details.")
 	check_args.add_argument("--checkm-taxon",
@@ -167,20 +169,25 @@ def parse_args():
 
 	anno_args = parser.add_argument_group(title="Annotation settings")
 	anno_args.add_argument("-g", "--genome",
-		help="Genome assembly (when starting from annotation).")
-	anno_args.add_argument("--gcode", default=11, type=int,
-		help="Genetic code.")
+		help="Genome assembly (when starting with assembled genome).")
 	anno_args.add_argument("--locus-tag",
-		help="Locus tag prefix. If not provided prefix will be generated from MD5 checksum.")
-	anno_args.add_argument("--locus-tag-inc", default=10, type=int,
-		help="Locus tag increment, default = 10")
-	anno_args.add_argument("--center-name", help="Genome center name.")
-	anno_args.add_argument("--minimum-contig-length",
+		help="Locus tag prefix. If not provided prefix will be by bakta.")
+	anno_args.add_argument("--compliant", action='store_true',
+		help="Force Genbank/ENA/DDJB compliance.")
+	anno_args.add_argument("--minimum-contig-length", type=int,
 		help="Minimum sequence length in genome assembly.")
-	anno_args.add_argument("--dfast-config",
-		help="Custom DFAST configuration file.")
+	anno_args.add_argument("--prefix",
+		help="Prefix for annotated files.")
+	anno_args.add_argument("--translation-table", default=11, type=int,
+		choices=[4, 11], help="Translation table: 11/4, default: 11.")
 
 	args = parser.parse_args()
+
+	if args.pe_1 and args.pe_2:
+		assert args.pe_1 != args.pe_2, 'Same file(s) for forward and reverse reads!'
+
+	if args.mp_1 and args.mp_2:
+		assert args.mp_1 != args.mp_2, 'Same file(s) for forward and reverse mate-pair reads!'
 
 	if (args.assembler == 'spades'
 		and not (
@@ -191,17 +198,17 @@ def parse_args():
 		)
 	):
 		logger.error("Impossible to run SPAdes without short reads!")
-		raise Exception("Bad parameters.")
+		raise Exception("Insufficient input data.")
 
 	if args.assembler == 'flye':
 
 		if args.nanopore and args.pacbio:
 			logger.error("Impossible to run Flye on mixed long reads!")
-			raise Exception("Bad parameters.")
+			raise Exception("Incorrect input data.")
 
 		if not (bool(args.nanopore) or bool(args.pacbio)):
 			logger.error("Impossible to run Flye without long reads!")
-			raise Exception("Bad parameters.")
+			raise Exception("Insufficient input data.")
 
 		if not args.genome_size_estimation:
 			args.calculate_genome_size = True
@@ -212,15 +219,6 @@ def parse_args():
 		or args.last_step == 'polishing'
 	):
 		args.perform_polishing = True
-
-	if args.dfast_config:
-		if os.path.isfile(args.dfast_config):
-			args.dfast_config = os.path.abspath(args.dfast_config)
-		else:
-			logger.error("File \"%s\" not found!", args.dfast_config)
-			raise FileNotFoundError(
-				f"DFAST config file \"{args.dfast_config}\" not found."
-			)
 
 	return args
 
@@ -415,53 +413,40 @@ def racon_polish(args, assembly, reads) -> str:
 	return assembly
 
 
-def locus_tag_gen(genome) -> str:
-	'''Returns a six letter locus tag generated from MD5 of genome assembly'''
-	logger.info("No locus tag provided. Generating it as MD5 hash of genome")
-	with open(genome, 'rb') as genomefile:
-		digest = hashlib.md5(genomefile.read()).hexdigest()
-		locus_tag = "".join(
-			[chr(65 + (int(digest[x], 16) + int(digest[x + 1], 16)) % 26) for x in range(0, 12, 2)]
-		)
-		logger.info("Locus tag generated: %s", locus_tag)
-		return locus_tag
-
-
 def annotate(args) -> str:
 	'''Returns path to annotated genome (FASTA)'''
 	logger.info("Genome annotation started")
 
 	try:
 		version_stdout = subprocess.run(
-			["dfast", "--version"], encoding="utf-8", check=True,
+			["bakta", "--version"], encoding="utf-8", check=True,
 			stderr=subprocess.PIPE, stdout=subprocess.PIPE).stdout
-		version = re.search(r'ver. (\d\S*)', version_stdout)[1]
-		logger.debug("DFAST version %s available.", version)
+		version = re.search(r'bakta (\S)', version_stdout)[1]
+		logger.debug("bakta version %s available.", version)
 	except Exception as e:
-		logger.critical("Failed to run DFAST!")
+		logger.critical("Failed to run bakta!")
 		raise e
 
 	annodir = os.path.join(args.output_dir, "annotation")
 
-	cmd = ["dfast", "-g", args.genome, "-o", annodir, "--organism",
-		" ".join([args.genus, args.species]), "--cpu", str(args.threads)]
+	cmd = ["bakta", args.genome, "-o", annodir,
+		'--genus', args.genus, '--species', args.species,
+		"--threads", str(args.threads),
+		'--translation-table', str(args.translation_table)]
+	if args.prefix:
+		cmd += ['--prefix', args.prefix]
 	if args.strain:
-		cmd += ["--strain", args.strain]
-	if args.center_name:
-		cmd += ["--center_name", args.center_name]
-	if not args.locus_tag:
-		args.locus_tag = locus_tag_gen(args.genome)
+		cmd += ['--strain', args.strain]
 	if args.locus_tag:
-		cmd += ["--locus_tag_prefix", args.locus_tag]
-	if args.locus_tag_inc:
-		cmd += ["--step", str(args.locus_tag_inc)]
+		cmd += ['--locus-tag', args.locus_tag]
+	if args.compliant:
+		cmd += ['--compliant']
 	if args.minimum_contig_length:
-		cmd += ["--minimum_length", args.minimum_contig_length]
-	if args.dfast_config:
-		cmd += ["--config", args.dfast_config]
+		cmd += ['--min-contig-length', str(args.minimum_contig_length)]
 
 	if run_external(args, cmd):
-		args.genome = os.path.join(annodir, "genome.fna")
+		stem = Path(args.genome).stem
+		args.genome = os.path.join(annodir, f"{stem}.fna")
 	return args.genome
 
 
@@ -563,7 +548,7 @@ def run_checkm(args):
 				args.checkm_rank = None
 
 		if not args.checkm_taxon or not args.checkm_rank:
-			args.checkm_taxon = "Archaea" if args.domain == "archaea" else "Bacteria"
+			args.checkm_taxon = args.domain
 			args.checkm_rank = "domain"
 
 		logger.info("%s marker set will be used for CheckM", args.checkm_taxon)

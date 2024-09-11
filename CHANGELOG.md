@@ -1,5 +1,10 @@
 ### ZGA changelog
 
+**0.1.1**
+
++ DFAST replaced with bakta
++ Python 3.8+ required
+
 **0.1.0**
 
 + Short reads normalization by k-mer count (BBNorm)
