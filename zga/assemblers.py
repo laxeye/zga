@@ -83,14 +83,6 @@ def spades_assemble(args, reads, aslydir) -> str:
 
 	logger = logging.getLogger("main")
 	version = get_assembler_version('spades.py')
-	''' Possible use of version:
-	v_major, v_minor = int(version.split(".")[:1])
-	if v_major > 3 or (v_major >= 3 and v_minor >= 14):
-		cmd += ['--isolate']
-	else:
-		cmd += ['--careful']
-	'''
-
 	cmd = ["spades.py", "-o", aslydir, "--careful", "-t", str(args.threads),
 		"--cov-cutoff", "auto", "-m", str(args.memory_limit)]
 

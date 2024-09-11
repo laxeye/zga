@@ -25,16 +25,15 @@ def filter_by_tile(args, reads, readdir):
 			and "forward" in lib.keys()
 			and "reverse" in lib.keys()
 		):
-			initial = (lib['forward'], (lib['reverse']))
 			filtered_pe_r1 = os.path.join(readdir, f"lib{index}.filtered.r1.fq.gz")
 			filtered_pe_r2 = os.path.join(readdir, f"lib{index}.filtered.r2.fq.gz")
 
-			cmd = ["filterbytile.sh", f"in={initial[0]}", f"in2={initial[1]}",
+			cmd = ["filterbytile.sh", f"in={lib['forward']}", f"in2={lib['reverse']}",
 				f"out={filtered_pe_r1}", f"out2={filtered_pe_r2}",
 				f"-Xmx={args.memory_limit}G"]
 
 			if run_external(args, cmd):
-				remove_intermediate(readdir, *initial)
+				remove_intermediate(readdir, lib['forward'], lib['reverse'])
 				lib['forward'], lib['reverse'] = filtered_pe_r1, filtered_pe_r2
 			else:
 				logger.warning("Filtering by tile wasn't perfomed correctly.")
@@ -60,21 +59,20 @@ def merge_bb(args, reads, readdir):
 			and "merged" not in lib.keys()
 		):
 			# Initial, unmerged and merged filenames
-			initial = (lib['forward'], (lib['reverse']))
 			u1 = os.path.join(readdir, f"lib{index}.u1.fq")
 			u2 = os.path.join(readdir, f"lib{index}.u2.fq")
 			merged = os.path.join(readdir, f"lib{index}.merged.fq")
 
 			cmd = ["bbmerge.sh", "strict=t",
 			f"Xmx={args.memory_limit}G", f"t={args.threads}",
-			f"in={initial[0]}", f"in2={initial[1]}",
+			f"in={lib['forward']}", f"in2={lib['reverse']}",
 			f"outu1={u1}", f"outu2={u2}", f"out={merged}"]
 
 			if args.bbmerge_extra:
 				cmd += args.bbmerge_extra
 
 			if run_external(args, cmd):
-				remove_intermediate(readdir, *initial)
+				remove_intermediate(readdir, lib['forward'], lib['reverse'])
 				lib['forward'], lib['reverse'] = u1, u2
 				lib['merged'] = merged
 
@@ -118,11 +116,11 @@ def bbduk_process(args, reads, readdir):
 
 		if "forward" in lib.keys() and "reverse" in lib.keys():
 			logger.info("Trimming and filtering paired end reads")
-			initial = (lib['forward'], (lib['reverse']))
+			initial = (lib['forward'], lib['reverse'])
 			out_pe1 = os.path.join(readdir, f"lib{index}.r1.fq")
 			out_pe2 = os.path.join(readdir, f"lib{index}.r2.fq")
 			out_stats = os.path.join(readdir, f"lib{index}.bbduk.pe.txt")
-			cmd = precmd + [f"in={initial[0]}", f"in2={initial[1]}",
+			cmd = precmd + [f"in={lib['forward']}", f"in2={lib['reverse']}",
 				f"out={out_pe1}", f"out2={out_pe2}", f"stats={out_stats}"]
 
 			if run_external(args, cmd):
@@ -131,7 +129,7 @@ def bbduk_process(args, reads, readdir):
 			else:
 				logger.error(
 					"Error during processing paired-end reads %s and %s",
-					initial[0], initial[1]
+					lib['forward'], lib['reverse']
 				)
 				logger.warning("Trying to repair paired-end reads.")
 				fixed, discarded = repair_pair(args, readdir, initial, index)
@@ -147,14 +145,13 @@ def bbduk_process(args, reads, readdir):
 		for read_type in ["single", "merged"]:
 			if read_type in lib.keys():
 				logger.info("Trimming and filtering %s reads", read_type)
-				initial = lib[read_type]
 				out = os.path.join(readdir, f"lib{index}.{read_type}.fq")
 				out_stats = os.path.join(readdir, f"lib{index}.bbduk.{read_type}.txt")
-				cmd = precmd + [f"in={initial}", f"out={out}",
+				cmd = precmd + [f"in={lib[read_type]}", f"out={out}",
 					f"stats={out_stats}"]
 
 				if run_external(args, cmd):
-					remove_intermediate(readdir, initial)
+					remove_intermediate(readdir, lib[read_type])
 					lib[read_type] = out
 
 	return reads

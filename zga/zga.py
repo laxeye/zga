@@ -7,8 +7,8 @@ import shutil
 import subprocess
 import re
 import hashlib
-from Bio import SeqIO
 from pathlib import Path
+from Bio import SeqIO
 from zga import __version__
 from zga.assemblers import assemble
 from zga.essential import run_external, create_subdir
@@ -220,6 +220,8 @@ def parse_args():
 	):
 		args.perform_polishing = True
 
+	args.output_dir = os.path.abspath(args.output_dir)
+
 	return args
 
 
@@ -347,9 +349,8 @@ def mash_estimate(args, reads):
 		logger.info("Estimated genome size is %s bp at coverage %s.",
 			int(best_estimation[0]), best_estimation[1])
 		return int(best_estimation[0])
-	else:
-		logger.error("Genome size estimation with \"mash\" failed.")
-		return None
+	logger.error("Genome size estimation with \"mash\" failed.")
+	return None
 
 
 def map_short_reads(args, assembly, reads, target):
@@ -371,9 +372,8 @@ def map_short_reads(args, assembly, reads, target):
 	logger.info("Mapping reads: %s", reads)
 	if run_external(args, cmd):
 		return target
-	else:
-		logger.error("Unsuccesful mapping.")
-		return None
+	logger.error("Unsuccesful mapping.")
+	return None
 
 
 def racon_polish(args, assembly, reads) -> str:
@@ -583,19 +583,7 @@ def check_last_step(args, step):
 		sys.exit(0)
 
 
-def main():
-	global logger
-	logger = logging.getLogger("main")
-	logger.setLevel(logging.DEBUG)
-	formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-	ch = logging.StreamHandler()
-	ch.setLevel(logging.INFO)
-	ch.setFormatter(formatter)
-	logger.addHandler(ch)
-
-	args = parse_args()
-
-	args.output_dir = os.path.abspath(args.output_dir)
+def create_out_dir(args):
 	if os.path.isdir(args.output_dir):
 		if args.force:
 			shutil.rmtree(args.output_dir)
@@ -609,6 +597,23 @@ def main():
 	except Exception as e:
 		logger.critical("Imposible to create directory \"%s\"!", args.output_dir)
 		raise e
+	return os.path.abspath(args.output_dir)
+
+
+def main():
+	global logger
+	logger = logging.getLogger("main")
+	logger.setLevel(logging.DEBUG)
+	formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+	ch = logging.StreamHandler()
+	ch.setLevel(logging.INFO)
+	ch.setFormatter(formatter)
+	logger.addHandler(ch)
+
+	args = parse_args()
+
+	args.output_dir = create_out_dir(args)
+	logger.debug("Writing output to %s", create_out_dir(args))
 
 	zgalogfile = os.path.join(args.output_dir, "zga.log")
 	fh = logging.FileHandler(zgalogfile)
