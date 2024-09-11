@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zga"
-version = "0.1.1b1"
+version = "0.1.1"
 authors = [
   { name="Aleksei Korzhenkov ", email="oscypek@ya.ru" }
 ]

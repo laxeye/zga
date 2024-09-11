@@ -4,6 +4,7 @@
 
 + DFAST replaced with bakta
 + Python 3.8+ required
++ pyproject.toml added
 
 **0.1.0**
 
