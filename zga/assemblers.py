@@ -269,8 +269,8 @@ def assembly_stats(genome):
 		'Total length': sum(lengths),
 		'Max length': lengths[0]
 	}
-	stats['N50'], stats['L50'] = get_nx_lx_metric(lengths, 50)
-	stats['N90'], stats['L90'] = get_nx_lx_metric(lengths, 90)
+	stats['L50'], stats['N50'] = get_nx_lx_metric(lengths, 50)
+	stats['L90'], stats['N90'] = get_nx_lx_metric(lengths, 90)
 	return stats
 
 
@@ -314,6 +314,9 @@ def assemble(args, reads, estimated_genome_size) -> str:
 	logger.info("Assembly length: %s", stats['Total length'])
 	logger.info("Contig count: %s", stats['Sequence count'])
 	logger.info("N50: %s", stats['N50'])
+	logger.info("L50: %s", stats['L50'])
+	logger.info("N90: %s", stats['N90'])
+	logger.info("L90: %s", stats['L90'])
 	write_assembly_stats(args, stats, prefix=args.assembler, s_format="table")
 
 	return assembly
